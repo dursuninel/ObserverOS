@@ -12,14 +12,20 @@ export interface AssetTransform {
 
 export interface AssetDefinition {
   readonly id: string;
-  readonly materialProfile?: string;
+  readonly materialProfile?: {
+    readonly emissiveIntensity?: number;
+    readonly metalness?: number;
+    readonly roughness?: number;
+    readonly tint?: string;
+  };
+  readonly originalPath: string;
+  readonly runtimePath: string;
   readonly shadowProfile?: string;
   readonly sourceBounds: {
     readonly depth: number;
     readonly height: number;
     readonly width: number;
   };
-  readonly sourceFile: string;
   readonly sourcePack: string;
   readonly targetFootprint?: {
     readonly depth: number;
@@ -27,6 +33,8 @@ export interface AssetDefinition {
   };
   readonly transform?: AssetTransform;
   readonly visualCenter?: Vec3;
+  readonly entrancePoint?: Vec3;
+  readonly workPoint?: Vec3;
   readonly visualHooks?: readonly string[];
 }
 
@@ -49,4 +57,3 @@ export class AssetRegistry {
     return [...this.#definitions.values()];
   }
 }
-
