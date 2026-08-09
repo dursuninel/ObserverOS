@@ -2,5 +2,5 @@
   "id": "Phase Zero Test",
   "localization": {},
   "schemaVersion": 0,
-  "gameplayValue": 42
+  "unexpectedField": true
 }

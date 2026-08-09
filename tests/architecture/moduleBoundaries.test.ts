@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, extname, relative, resolve } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const sourceRoot = resolve(process.cwd(), 'src');
@@ -13,10 +14,48 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
-function relativeImports(file: string): string[] {
+function moduleSpecifiers(file: string): string[] {
   const source = readFileSync(file, 'utf8');
-  const imports = source.matchAll(/(?:import|export)\s+(?:type\s+)?(?:[^'"]+from\s+)?['"](\.[^'"]+)['"]/g);
-  return [...imports].map((match) => match[1]).filter((value): value is string => value !== undefined);
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const specifiers: string[] = [];
+
+  function visit(node: ts.Node): void {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1
+    ) {
+      const argument = node.arguments[0];
+      if (argument !== undefined && ts.isStringLiteral(argument)) specifiers.push(argument.text);
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return specifiers;
+}
+
+function identifiers(file: string): Set<string> {
+  const source = readFileSync(file, 'utf8');
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const names = new Set<string>();
+
+  function visit(node: ts.Node): void {
+    if (ts.isIdentifier(node)) names.add(node.text);
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return names;
 }
 
 function resolveSourceImport(fromFile: string, specifier: string): string | undefined {
@@ -62,10 +101,64 @@ function findCycle(graph: ReadonlyMap<string, readonly string[]>): string[] | un
 describe('module boundaries', () => {
   it('keeps simulation free of presentation and browser dependencies', () => {
     const simulationFiles = sourceFiles(resolve(sourceRoot, 'game/simulation'));
-    const bannedImports = /from\s+['"](?:react|zustand|three|@react-three\/fiber|@xyflow\/react)|save\/adapters/;
+    const bannedPackages = [
+      'react',
+      'react-dom',
+      'zustand',
+      'three',
+      '@react-three/fiber',
+      '@xyflow/react',
+    ];
+    const bannedBrowserGlobals = [
+      'IDBDatabase',
+      'IDBFactory',
+      'document',
+      'indexedDB',
+      'localStorage',
+      'navigator',
+      'sessionStorage',
+      'window',
+    ];
 
     for (const file of simulationFiles) {
-      expect(readFileSync(file, 'utf8'), relative(sourceRoot, file)).not.toMatch(bannedImports);
+      const imports = moduleSpecifiers(file);
+      const names = identifiers(file);
+
+      for (const packageName of bannedPackages) {
+        expect(
+          imports.some(
+            (specifier) => specifier === packageName || specifier.startsWith(`${packageName}/`),
+          ),
+          `${relative(sourceRoot, file)} imports ${packageName}`,
+        ).toBe(false);
+      }
+
+      expect(
+        imports.some((specifier) => specifier.includes('save/adapters')),
+        `${relative(sourceRoot, file)} imports a browser storage adapter`,
+      ).toBe(false);
+
+      for (const globalName of bannedBrowserGlobals) {
+        expect(names.has(globalName), `${relative(sourceRoot, file)} uses ${globalName}`).toBe(false);
+      }
+    }
+  });
+
+  it('keeps browser storage types and globals inside the save adapter boundary', () => {
+    const saveRoot = resolve(sourceRoot, 'game/save');
+    const adapterRoot = resolve(saveRoot, 'adapters');
+    const storageIdentifiers = ['IDBDatabase', 'IDBFactory', 'indexedDB', 'localStorage', 'sessionStorage'];
+
+    for (const file of sourceFiles(saveRoot).filter((path) => !path.startsWith(adapterRoot))) {
+      const names = identifiers(file);
+      for (const identifier of storageIdentifiers) {
+        expect(names.has(identifier), `${relative(sourceRoot, file)} uses ${identifier}`).toBe(false);
+      }
+
+      expect(
+        moduleSpecifiers(file).some((specifier) => specifier.includes('/adapters/')),
+        `${relative(sourceRoot, file)} imports a persistence adapter`,
+      ).toBe(false);
     }
   });
 
@@ -74,7 +167,8 @@ describe('module boundaries', () => {
     const graph = new Map(
       files.map((file) => [
         file,
-        relativeImports(file)
+        moduleSpecifiers(file)
+          .filter((specifier) => specifier.startsWith('.'))
           .map((specifier) => resolveSourceImport(file, specifier))
           .filter((dependency): dependency is string => dependency !== undefined),
       ]),

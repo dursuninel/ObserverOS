@@ -9,7 +9,12 @@ const noEdges: Edge[] = [];
 export function ProtocolFlowBoundary() {
   return (
     <div aria-hidden="true" className="protocol-flow-shell">
-      <ReactFlow edges={noEdges} nodes={noNodes} nodesDraggable={false}>
+      <ReactFlow
+        edges={noEdges}
+        nodes={noNodes}
+        nodesDraggable={false}
+        proOptions={{ hideAttribution: true }}
+      >
         <Background />
       </ReactFlow>
     </div>

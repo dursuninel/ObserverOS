@@ -52,7 +52,7 @@ Domain sınırlarını erken kurmak amacıyla React ve TypeScript tabanlı web u
 
 - Lint: PASS
 - Typecheck: PASS
-- Test: PASS — 4 test dosyası, 10 test
+- Test: PASS — 5 test dosyası, 13 test
 - Production build: PASS
 - Development server HTTP smoke testi: PASS
 - npm dependency audit: 0 vulnerability
@@ -64,6 +64,15 @@ Domain sınırlarını erken kurmak amacıyla React ve TypeScript tabanlı web u
 - Somut save migration yok; yalnız extension point bulunuyor.
 - Otomatik browser/E2E test altyapısı henüz bulunmuyor.
 
+### Bağımsız Faz 0 doğrulaması
+
+- Simulation import denetimi TypeScript AST tabanlı hale getirildi.
+- `react-dom`, paket alt yolları ve browser/storage global kullanımları mimari test kapsamına alındı.
+- Simulation kaynakları için DOM kütüphanesi içermeyen ayrı strict typecheck eklendi.
+- Save domain portu ile browser adapter sınırı otomatik testle güvence altına alındı.
+- R3F ve React Flow integration shell modülleri doğrudan yükleme testiyle doğrulandı.
+- React Flow'un localization dışı varsayılan attribution metni shell'den kaldırıldı.
+
 ### Sonraki fazlara bırakılanlar
 
 - ColonyVisualPrototype ve gerçek asset pipeline
@@ -73,4 +82,3 @@ Domain sınırlarını erken kurmak amacıyla React ve TypeScript tabanlı web u
 - Protocol compiler/runtime ve gerçek graph editor
 - Gerçek planet gameplay content'i
 - Gerçek save/load, autosave, backup ve migration davranışları
-

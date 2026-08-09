@@ -38,6 +38,7 @@ export default tseslint.config(
         {
           paths: [
             { name: 'react', message: 'Simulation must remain React-independent.' },
+            { name: 'react-dom', message: 'Simulation must remain React-independent.' },
             { name: 'zustand', message: 'Simulation must not depend on UI state.' },
             { name: 'three', message: 'Simulation must remain renderer-independent.' },
             { name: '@react-three/fiber', message: 'Simulation must remain renderer-independent.' },
@@ -45,11 +46,24 @@ export default tseslint.config(
           ],
           patterns: [
             {
+              regex: '^(?:react|react-dom|zustand|three|@react-three/fiber|@xyflow/react)/',
+              message: 'Simulation must not depend on presentation packages.'
+            },
+            {
               regex: 'save/adapters',
               message: 'Simulation must not depend on browser storage adapters.'
             }
           ]
         }
+      ],
+      'no-restricted-globals': [
+        'error',
+        { name: 'window', message: 'Simulation must remain browser-independent.' },
+        { name: 'document', message: 'Simulation must remain browser-independent.' },
+        { name: 'navigator', message: 'Simulation must remain browser-independent.' },
+        { name: 'indexedDB', message: 'Simulation must not use browser storage.' },
+        { name: 'localStorage', message: 'Simulation must not use browser storage.' },
+        { name: 'sessionStorage', message: 'Simulation must not use browser storage.' }
       ]
     }
   }
