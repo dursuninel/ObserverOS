@@ -1,0 +1,119 @@
+:root {
+  color: #dce8ed;
+  background: #071116;
+  font-family: Inter, system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+a {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+.app-header {
+  align-items: center;
+  background: #0d1d24;
+  border-bottom: 1px solid #28404a;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+}
+
+.app-title {
+  font-weight: 700;
+}
+
+.app-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.app-navigation a {
+  border-radius: 0.25rem;
+  color: #9eb1b9;
+  padding: 0.5rem 0.7rem;
+  text-decoration: none;
+}
+
+.app-navigation a.active {
+  background: #18333e;
+  color: #f1fafc;
+}
+
+.app-main,
+.workspace {
+  min-height: 0;
+}
+
+.workspace {
+  display: grid;
+  grid-template-rows: auto minmax(20rem, 1fr);
+  height: 100%;
+  padding: 1rem;
+}
+
+.workspace-copy h1 {
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.workspace-copy p {
+  color: #9eb1b9;
+  margin: 0.35rem 0 1rem;
+}
+
+.workspace-empty {
+  grid-template-rows: auto;
+}
+
+.world-scene-shell,
+.protocol-flow-shell {
+  border: 1px solid #28404a;
+  border-radius: 0.4rem;
+  min-height: 20rem;
+  overflow: hidden;
+}
+
+.world-scene-shell {
+  background: #09171d;
+}
+
+.protocol-flow-shell {
+  background: #0a151a;
+}
+
+@media (max-width: 720px) {
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .app-navigation {
+    width: 100%;
+  }
+
+  .app-navigation a {
+    flex: 1;
+    text-align: center;
+  }
+}
