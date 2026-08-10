@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_PROTOTYPE_STATE, EMPTY_METRICS } from '../../world/prototype/prototypeConfig';
 import type { PrototypeDebugState, WorldMetrics } from '../../world/prototype/types';
+import type { RuntimeObjectInspection } from '../../world/renderer/runtimeObjectInspector';
 import { WorldScene } from '../../world/renderer/WorldScene';
 import { PrototypeDebugPanel } from './PrototypeDebugPanel';
 
@@ -12,6 +13,7 @@ export function ColonyWorkspace() {
   const [metrics, setMetrics] = useState<WorldMetrics>(EMPTY_METRICS);
   const [debugPanelOpen, setDebugPanelOpen] = useState(true);
   const [cameraResetToken, setCameraResetToken] = useState(0);
+  const [objectInspection, setObjectInspection] = useState<RuntimeObjectInspection | null>(null);
 
   const setCameraPreset = (cameraPreset: PrototypeDebugState['cameraPreset']) => {
     setDebugState((current) => ({ ...current, cameraPreset }));
@@ -25,8 +27,8 @@ export function ColonyWorkspace() {
         <div className="world-status"><span className="status-dot" />{t('prototype.worldStatus')}</div>
       </header>
       <div className="prototype-stage">
-        <WorldScene cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={setMetrics} />
-        <PrototypeDebugPanel metrics={metrics} onCameraPreset={setCameraPreset} onChange={setDebugState} onToggle={() => setDebugPanelOpen((open) => !open)} open={debugPanelOpen} state={debugState} />
+        <WorldScene cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={setMetrics} onObjectInspection={setObjectInspection} />
+        <PrototypeDebugPanel inspection={objectInspection} metrics={metrics} onCameraPreset={setCameraPreset} onChange={setDebugState} onToggle={() => setDebugPanelOpen((open) => !open)} open={debugPanelOpen} state={debugState} />
         {debugPanelOpen && debugState.safeAreasVisible && <><div className="safe-mask safe-mask-right">{t('prototype.safe.right')}</div><div className="safe-mask safe-mask-bottom">{t('prototype.safe.bottom')}</div></>}
         <div className="prototype-legend"><span>{t('prototype.legend.pan')}</span><span>{t('prototype.legend.zoom')}</span></div>
       </div>

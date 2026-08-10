@@ -39,4 +39,12 @@ describe('runtime asset material normalization', () => {
     expect(Array.isArray(mesh.material)).toBe(true);
     expect(mesh.material).toHaveLength(2);
   });
+
+  it('honors an explicit asset-level shadow-casting override', () => {
+    const mesh = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
+    const root = new Group();
+    root.add(mesh);
+    normalizeAssetMaterials(root, { ...asset, castShadow: false });
+    expect(mesh.castShadow).toBe(false);
+  });
 });

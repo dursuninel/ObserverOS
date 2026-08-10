@@ -1,5 +1,5 @@
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { BufferAttribute, Mesh, PointLight, Shape } from 'three';
 
 import { useSimulationSnapshot } from '../../../app/providers/simulationContext';
@@ -18,12 +18,14 @@ import { CameraRig } from './CameraRig';
 import { PresentationTimeDriver, PresentationTimeProvider } from './PresentationTime';
 import { usePresentationClock } from './presentationTimeContext';
 import { RuntimeAsset } from './RuntimeAsset';
+import { inspectRuntimeObject, type RuntimeObjectInspection } from './runtimeObjectInspector';
 
 interface WorldSceneProps {
   readonly cameraResetToken: number;
   readonly debugPanelOpen: boolean;
   readonly debugState: PrototypeDebugState;
   readonly onMetrics: (metrics: WorldMetrics) => void;
+  readonly onObjectInspection: (inspection: RuntimeObjectInspection) => void;
 }
 
 function MetricsProbe({ onMetrics, particleCount }: { readonly onMetrics: (metrics: WorldMetrics) => void; readonly particleCount: number }) {
@@ -90,9 +92,6 @@ function Facility({ debugState, id, simulationState }: { readonly debugState: Pr
     <RuntimeAsset asset={requirePrototypeAsset('habitat')} />
     <RuntimeAsset asset={requirePrototypeAsset('habitat-tunnel')} position={[1.35, 0, 0]} rotationY={Math.PI / 2} />
     <RuntimeAsset asset={requirePrototypeAsset('habitat-annex')} position={[2.65, 0, 0.05]} />
-    <RuntimeAsset asset={requirePrototypeAsset('floor-light')} position={[-0.4, 0.02, 2.4]} />
-    <RuntimeAsset asset={requirePrototypeAsset('floor-light')} position={[1.2, 0.02, 2.7]} />
-    <RuntimeAsset asset={requirePrototypeAsset('floor-light')} position={[2.7, 0.02, 2.35]} />
     <FacilityActivity {...signature} height={1.15} />
   </group>;
   return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('oxygen')} /><RuntimeAsset asset={requirePrototypeAsset('oxygen-vent')} /><FacilityActivity {...signature} height={1.55} /></group>;
@@ -135,6 +134,7 @@ function LocalFrozenHaze() {
 
 function Colonist({ colonist, fixedStepPresentationSeconds }: { readonly colonist: ColonistState; readonly fixedStepPresentationSeconds: number }) {
   const group = useRef<import('three').Group>(null);
+  const character = useRef<import('three').Group>(null);
   const presentationClock = usePresentationClock();
   const [motion] = useState(() => new ColonistMotionInterpolator(colonist));
   useLayoutEffect(() => motion.observe(colonist), [colonist, motion]);
@@ -146,9 +146,9 @@ function Colonist({ colonist, fixedStepPresentationSeconds }: { readonly colonis
   const index = Number.parseInt(colonist.id.split('-').at(-1) ?? '1', 10) - 1;
   useFrame(() => {
     const deltaSeconds = presentationClock.getDeltaSeconds();
-    if (!group.current) return;
+    if (!group.current || !character.current) return;
     const pose = getAuthoritativeColonistPose(motion.advance(deltaSeconds, fixedStepPresentationSeconds));
-    group.current.visible = pose.visible;
+    character.current.visible = pose.visible;
     group.current.position.set(...pose.position);
     group.current.rotation.y = interpolateFacing(group.current.rotation.y, pose.rotationY, deltaSeconds);
     if (animationRef.current !== pose.animation) {
@@ -160,7 +160,10 @@ function Colonist({ colonist, fixedStepPresentationSeconds }: { readonly colonis
       setActivity(pose.activity);
     }
   });
-  return <group ref={group} position={initialPose.position} rotation-y={initialPose.rotationY} scale={0.92} visible={initialPose.visible}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={animation} />{activity && <MaintenanceActivity />}</group>;
+  return <group ref={group} position={initialPose.position} rotation-y={initialPose.rotationY} scale={0.92}>
+    <group ref={character} visible={initialPose.visible}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={animation} /></group>
+    {activity && <MaintenanceActivity />}
+  </group>;
 }
 
 function MaintenanceActivity() {
@@ -193,7 +196,7 @@ function Ground() {
   );
 }
 
-function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics, simulationSnapshot }: WorldSceneProps & { readonly simulationSnapshot: SimulationSnapshot }) {
+function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics, onObjectInspection, simulationSnapshot }: WorldSceneProps & { readonly simulationSnapshot: SimulationSnapshot }) {
   const quality = QUALITY_PROFILES[debugState.quality];
   const night = isNight(debugState.timeOfDay);
   const skyColor = night ? '#07101b' : '#9fb8c0';
@@ -204,9 +207,14 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics,
       {debugState.fogEnabled && <fog attach="fog" args={[skyColor, night ? 58 : 64, night ? 96 : 105]} />}
       <ambientLight intensity={night ? 0.72 : 1.45} color={night ? '#6f87a8' : '#d7eef2'} />
       <directionalLight castShadow={quality.shadows} color={night ? '#86a1cd' : '#fff1d3'} intensity={night ? 1.05 : 2.4} position={[-12, 20, 10]} shadow-mapSize={[1024, 1024]} />
-      <Ground />
-      {debugState.fogEnabled && <LocalFrozenHaze />}
-      <Suspense fallback={null}>
+      <group onPointerDown={(event: ThreeEvent<PointerEvent>) => {
+        if (!debugState.objectInspectorEnabled) return;
+        event.stopPropagation();
+        onObjectInspection(inspectRuntimeObject(event.object));
+      }}>
+        <Ground />
+        {debugState.fogEnabled && <LocalFrozenHaze />}
+        <Suspense fallback={null}>
         {roadTiles.map(({ position: [x, z], rotationY }) => <RuntimeAsset key={`${x}:${z}`} asset={requirePrototypeAsset('road-tile')} position={[x, 0.02, z]} rotationY={rotationY} scaleMultiplier={0.36} />)}
         {(['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen'] as const).map((id) => {
           const instanceId = id === 'reactor' ? 'reactor-01' : id === 'mine' ? 'mine-01' : id === 'oxygen' ? 'oxygen-processor-01' : id === 'battery' ? 'battery-01' : undefined;
@@ -216,10 +224,10 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics,
         {PROTOTYPE_LAYOUT.zones.outerRocks.map(([x, z, rotation, scale], index) => <RuntimeAsset key={`outer-${index}`} asset={requirePrototypeAsset('rock-large')} position={[x, 0.12, z]} rotationY={rotation} scaleMultiplier={scale} />)}
         {PROTOTYPE_LAYOUT.zones.transitionRocks.map(([x, z, rotation], index) => <RuntimeAsset key={`transition-${index}`} asset={requirePrototypeAsset(index % 2 ? 'rock-small-a' : 'rock-small-b')} position={[x, 0.12, z]} rotationY={rotation} />)}
         {PROTOTYPE_LAYOUT.zones.coreCrates.map(([x, z, rotation], index) => <RuntimeAsset key={`crate-${index}`} asset={requirePrototypeAsset('supply-crate')} position={[x, 0.14, z]} rotationY={rotation} />)}
-        {roadTiles.filter((_, index) => index % 3 === 0).map(({ position: [x, z] }, index) => <RuntimeAsset key={`floor-${index}`} asset={requirePrototypeAsset('floor-light')} position={[x, 0.16, z]} />)}
         <StreetLights debugState={debugState} />
         {simulationSnapshot.colonists.map((colonist) => <Colonist colonist={colonist} fixedStepPresentationSeconds={simulationSnapshot.clock.fixedStepMinutes * simulationSnapshot.clock.realSecondsPerSimulationHour / 60} key={colonist.id} />)}
-      </Suspense>
+        </Suspense>
+      </group>
       {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
       <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />
       <CameraRig panelOpen={debugPanelOpen} preset={debugState.cameraPreset} resetToken={cameraResetToken} />
@@ -227,7 +235,7 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics,
   );
 }
 
-export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, onMetrics }: WorldSceneProps) {
+export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, onMetrics, onObjectInspection }: WorldSceneProps) {
   const quality = QUALITY_PROFILES[debugState.quality];
   const simulationSnapshot = useSimulationSnapshot();
   return (
@@ -235,7 +243,7 @@ export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, onMet
       <PresentationTimeProvider speed={simulationSnapshot.clock.speed}>
         <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
           <PresentationTimeDriver />
-          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={onMetrics} simulationSnapshot={simulationSnapshot} />
+          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={onMetrics} onObjectInspection={onObjectInspection} simulationSnapshot={simulationSnapshot} />
         </Canvas>
       </PresentationTimeProvider>
     </div>

@@ -6,11 +6,11 @@ import { getAuthoritativeColonistPose } from '../../src/game/world/prototype/aut
 const base: ColonistState = { assignment: null, id: 'colonist-002', locationId: 'habitat', restDue: false, restGroup: 1, state: 'available', travel: null };
 
 describe('authoritative colonist world adapter', () => {
-  it('renders Available and Resting colonists at stable habitat positions', () => {
+  it('keeps Available and Resting colonists inside Habitat instead of rendering static outdoor models', () => {
     const available = getAuthoritativeColonistPose(base);
     const resting = getAuthoritativeColonistPose({ ...base, state: 'resting' });
     expect(available).toEqual(resting);
-    expect(available).toMatchObject({ activity: false, animation: 'Idle', visible: true });
+    expect(available).toMatchObject({ activity: false, animation: 'Idle', visible: false });
   });
 
   it('maps authoritative travel progress onto the target facility route', () => {
@@ -28,9 +28,20 @@ describe('authoritative colonist world adapter', () => {
     expect(start.animation).toBe('Walk');
     expect(middle.position).not.toEqual(start.position);
     expect(end.position).not.toEqual(middle.position);
+    expect(start.visible).toBe(true);
   });
 
-  it('hides indoor operation and shows outside maintenance at the work point', () => {
+  it('keeps a maintenance worker visible while traveling to the work point', () => {
+    const traveling: ColonistState = {
+      ...base,
+      assignment: { facilityId: 'mine-01', id: 'work-maintenance-mine-01', phase: 'traveling', taskType: 'maintenance' },
+      state: 'working',
+      travel: { durationMinutes: 12, elapsedMinutes: 6, id: 'maintenance-travel-1', purpose: 'to-assignment', routeNodeIds: ['habitat-entrance', 'spine-habitat', 'spine-oxygen', 'spine-mine', 'mine-approach', 'mine-entrance'], sourceLocationId: 'habitat', startedAt: 0, targetLocationId: 'mine-01', taskType: 'maintenance' },
+    };
+    expect(getAuthoritativeColonistPose(traveling)).toMatchObject({ activity: false, animation: 'Walk', visible: true });
+  });
+
+  it('hides indoor operation and uses an effect-only maintenance fallback at the work point', () => {
     const operation = getAuthoritativeColonistPose({
       ...base, state: 'working', assignment: { facilityId: 'mine-01', id: 'work-operate-mine-01', phase: 'on-site', taskType: 'operate' },
     });
@@ -38,6 +49,6 @@ describe('authoritative colonist world adapter', () => {
       ...base, state: 'working', assignment: { facilityId: 'mine-01', id: 'work-maintenance-mine', phase: 'on-site', taskType: 'maintenance' },
     });
     expect(operation.visible).toBe(false);
-    expect(maintenance).toMatchObject({ activity: true, animation: 'Idle', visible: true });
+    expect(maintenance).toMatchObject({ activity: true, animation: 'Idle', visible: false });
   });
 });

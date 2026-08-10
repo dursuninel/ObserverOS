@@ -55,6 +55,7 @@ export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY
       ref={presentationRoot}
       rotation={[0, rotationY + (asset.transform?.rotationY ?? 0), 0]}
       scale={(asset.transform?.scale ?? 1) * scaleMultiplier}
+      userData={{ runtimeAssetId: asset.id, sourcePack: asset.sourcePack }}
       visible={asset.animationClips === undefined}
     >
       <primitive object={object} />

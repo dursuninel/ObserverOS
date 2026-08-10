@@ -5,6 +5,7 @@ export const EMPTY_METRICS: WorldMetrics = { drawCalls: 0, fps: 0, frameTimeMs: 
 export const DEFAULT_PROTOTYPE_STATE: PrototypeDebugState = {
   cameraPreset: 'overview',
   fogEnabled: true,
+  objectInspectorEnabled: false,
   quality: 'high',
   safeAreasVisible: false,
   snowEnabled: true,
