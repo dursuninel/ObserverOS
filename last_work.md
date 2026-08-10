@@ -633,3 +633,39 @@ VISIBLE T-POSE OBSERVED: NO
 FIXED-STEP MOVEMENT PULSING OBSERVED: NO
 
 FAZ 3 TEST 3 KULLANICI İNCELEMESİ İÇİN HAZIR
+
+---
+
+## Faz 3 — Test 4 / Character Visual Cleanup & Animation Acceptance
+
+**Durum:** Kullanıcı incelemesi için hazır
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-3-workforce-maintenance`
+
+### Genel özet
+
+- Karakterlerin altında görülen siyah nesnenin world prop olmadığı; Finn, Rae ve Barbara runtime GLTF'lerinde `Middle1.R` el kemiğine bağlı `Pistol` mesh'i olduğu doğrulandı. Üç karakter tanımı da AssetRegistry metadata'sında `hiddenNodeNames: ['Pistol']` bildirir; generic normalization bu node'u görünmez yapar.
+- `Idle` ve `Walk` action'ları açıkça enabled, infinite `LoopRepeat`, unclamped, running ve weight 1 hazırlanır. İlk görünür kare öncesinde mixer `update(0)` ile değerlendirilir; görünürlük ancak en az bir çalışan action pozitif effective weight taşıyorsa açılır.
+- Crossfade sırasında yeni action'ın ilk ağırlığı sıfır olsa bile önceki action'ın pozitif ağırlığı ready invariant'ını korur; action toplamında sıfır-pose aralığı oluşmaz. Action/mixer cache'i Test 3'teki gibi stabil kalır.
+- Üç gerçek GLTF rig'inde hem `Idle` hem `Walk` kemik quaternion'larını değiştirdi, 1 saniyelik klipler loop etti ve her varyantta 10 ardışık Idle/Walk geçişi pozitif ağırlıklı pozla tamamlandı.
+- Yakın plan browser gözlemi 60 saniyeyi geçti: resting/available, route walking ve gerçek Mine maintenance akışı ayrı ayrı izlendi. Görünür T/bind-pose, silah/pistol veya karakter altında bağlı siyah nesne görülmedi.
+- Pause ölçümü `535 → 535`; ardından ×2 ve ×4 ilerlemesi `542 → 557` olarak doğrulandı. Test 3 continuous motion, authoritative routes, PresentationClock ve workforce/maintenance davranışı korundu.
+
+### Doğrulama
+
+- Lint: PASS — 0 hata, 0 uyarı.
+- Typecheck: PASS.
+- Simulation-only typecheck: PASS.
+- Full test: PASS — 21 dosya, 164 test.
+- Gerçek karakter rig/weapon/transition testi: PASS — Finn, Rae, Barbara için actual GLTF parse + AnimationMixer.
+- Production build: PASS — yalnız mevcut 500 kB chunk-size uyarısı sürüyor.
+- `git diff --check`: PASS — yalnız Windows LF/CRLF bilgilendirme uyarıları var.
+- Yeni dependency eklenmedi; Faz 4 kapsamına girilmedi; commit veya push yapılmadı.
+
+VISIBLE T-POSE/BIND-POSE OBSERVED: NO
+
+VISIBLE WEAPON/PISTOL OBSERVED: NO
+
+MYSTERIOUS OBJECT UNDER CHARACTER OBSERVED: NO
+
+FAZ 3 TEST 4 KULLANICI İNCELEMESİ İÇİN HAZIR

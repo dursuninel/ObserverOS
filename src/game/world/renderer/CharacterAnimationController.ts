@@ -1,4 +1,11 @@
-import type { AnimationAction, AnimationClip, AnimationMixer, Object3D } from 'three';
+import { LoopRepeat, type AnimationAction, type AnimationClip, type AnimationMixer, type Object3D } from 'three';
+
+export interface ActiveCharacterAnimationState {
+  readonly effectiveWeight: number;
+  readonly enabled: boolean;
+  readonly name: string;
+  readonly running: boolean;
+}
 
 /** Stable action cache and gap-free locomotion transition controller. */
 export class CharacterAnimationController {
@@ -20,10 +27,13 @@ export class CharacterAnimationController {
     const next = this.actions.get(name);
     if (next === undefined) throw new Error(`Runtime animation clip is missing: ${name}`);
     const previous = this.activeAction;
-    next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
+    next.enabled = true;
+    next.clampWhenFinished = false;
+    next.setLoop(LoopRepeat, Number.POSITIVE_INFINITY).reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
     if (previous !== null) previous.crossFadeTo(next, this.fadeSeconds, false);
     this.activeAction = next;
     this.activeName = name;
+    this.mixer.update(0);
     return true;
   }
 
@@ -35,6 +45,23 @@ export class CharacterAnimationController {
 
   getActiveName(): string | null {
     return this.activeName;
+  }
+
+  getActiveState(): ActiveCharacterAnimationState | null {
+    if (this.activeAction === null || this.activeName === null) return null;
+    return {
+      effectiveWeight: this.activeAction.getEffectiveWeight(),
+      enabled: this.activeAction.enabled,
+      name: this.activeName,
+      running: this.activeAction.isRunning(),
+    };
+  }
+
+  isReady(): boolean {
+    for (const action of this.actions.values()) {
+      if (action.enabled && action.isRunning() && action.getEffectiveWeight() > 0) return true;
+    }
+    return false;
   }
 
   update(deltaSeconds: number): void {

@@ -38,9 +38,12 @@ export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY
   const presentationRoot = useRef<import('three').Group>(null);
 
   useLayoutEffect(() => {
-    if (animationController !== null && animation !== undefined) animationController.activate(animation);
+    if (animationController !== null && animation !== undefined) {
+      animationController.activate(animation);
+      if (!animationController.isReady()) throw new Error(`Animation "${animation}" was not ready for visible runtime asset "${asset.id}".`);
+    }
     if (presentationRoot.current !== null) presentationRoot.current.visible = true;
-  }, [animation, animationController]);
+  }, [animation, animationController, asset.id]);
 
   useEffect(() => () => animationController?.dispose(), [animationController]);
   useFrame(() => animationController?.update(presentationClock.getDeltaSeconds()));
