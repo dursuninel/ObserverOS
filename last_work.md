@@ -589,3 +589,47 @@ FAZ 3 TEST 1 KULLANICI ONAYI İÇİN HAZIR
 - Faz 4, Protocol Runtime, fake wandering, yeni colonist main state, Health/Assessment veya save UI uygulanmadı.
 
 FAZ 3 TEST 2 KULLANICI İNCELEMESİ İÇİN HAZIR
+
+---
+
+## Faz 3 — Test 3 / Continuous Motion + Character Animation Stability
+
+**Durum:** Kullanıcı incelemesi için hazır
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-3-workforce-maintenance`
+
+### Genel özet
+
+- Fixed-step authoritative colonist pose hedeflerine uygulanan generic exponential lerp kaldırıldı. Presentation katmanı artık önceki ve güncel authoritative travel progress arasında, aynı `routeNodeIds` polyline’ı üzerinde ve simulation’ın önüne geçmeden ara kare üretir.
+- Travel tamamlanması, tesis entrance’ı ve Habitat dönüşü terminal state’e sıçramadan devredilir. Facing geçişi ±PI wrap güvenli shortest-angle damping ile yumuşatılır.
+- Her görünür karakter için cloned skinned object, `AnimationMixer` ve action cache kimliği snapshot/animation prop değişimlerinden bağımsız ve stabil hale getirildi.
+- `Idle`/`Walk` geçişleri active-action boşluğu oluşturmayan crossfade ile yapılır. Animasyon aynı isimle tekrar geldiğinde resetlenmez; ilk görünür kare öncesi layout effect + ready gate kullanılır.
+- Presentation delta mixer’a doğrudan verilir: Pause’da 0, ×2/×4’te authoritative presentation hızına ölçekli. Gameplay state renderer’a taşınmadı.
+- Finn, Rae ve Barbara gerçek runtime GLTF dosyalarında `Idle`/`Walk` clip’leri ile track→skin-joint bağları programatik olarak doğrulandı.
+- Maintenance lifecycle, real workforce travel, service activity, saveable task state ve Faz 3 Test 2 davranışları korundu; Faz 4 kapsamına girilmedi.
+
+### Doğrulama
+
+- Lint: PASS — 0 hata, 0 uyarı.
+- Typecheck: PASS.
+- Simulation-only typecheck: PASS.
+- Full test: PASS — 21 dosya, 153 test.
+- Determinism/workforce/maintenance/presentation/character/architecture matrisi: PASS — 10 dosya, 103 test.
+- Production build: PASS — yalnız mevcut 500 kB chunk-size uyarısı sürüyor.
+- `git diff --check`: PASS — yalnız Windows LF/CRLF bilgilendirme uyarıları var.
+- Browser: ×1’de 60+ gerçek saniye gözlem; en az üç Habitat→facility yolculuğu, facility→Habitat dönüşü, route corner/entrance handoff, Pause/Resume, ×1/×2/×4 ve bakım yolculuğu gözlendi.
+- Browser pause ölçümü: elapsed `247 → 247`; resume sonrası aynı akıştan `250`.
+- Browser High profil gözlemi: yaklaşık 124–145 FPS; görünür T-pose veya fixed-step movement pulse görülmedi.
+
+### Kapsam ve teknik borç
+
+- Yeni dependency eklenmedi.
+- Gerçek cihazlarda sabit 30 ve 60 Hz ekran manuel videosu alınmadı; bu hızlar eşit presentation time üzerinden otomatik test edildi, canlı browser yaklaşık 144 FPS idi.
+- Slow-motion debug HUD kalıcı ürüne eklenmedi; action-gap/crossfade davranışı controller unit testinde frame-gap invariant’ı ile doğrulandı.
+- Protocol Runtime/Editor, Debugger final UI, save/load UI, Health/Assessment, campaign ve diğer Faz 4+ alanları deferred kaldı.
+
+VISIBLE T-POSE OBSERVED: NO
+
+FIXED-STEP MOVEMENT PULSING OBSERVED: NO
+
+FAZ 3 TEST 3 KULLANICI İNCELEMESİ İÇİN HAZIR

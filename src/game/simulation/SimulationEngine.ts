@@ -235,6 +235,7 @@ export class SimulationEngine {
       clock: Object.freeze({
         fixedStepMinutes: this.config.clock.fixedStepMinutes,
         paused: this.clock.getSpeed() === 0,
+        realSecondsPerSimulationHour: this.config.clock.realSecondsPerSimulationHour,
         speed: this.clock.getSpeed(),
       }),
       colonists: Object.freeze([...this.colonists].sort((left, right) => left.id.localeCompare(right.id)).map(toReadonlyColonist)),

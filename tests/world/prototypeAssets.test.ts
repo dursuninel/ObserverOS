@@ -36,4 +36,24 @@ describe('prototype runtime assets', () => {
       }
     }
   });
+
+  it('validates real Idle and Walk clips against every astronaut skeleton', () => {
+    const characters = prototypeAssetDefinitions.filter(({ id }) => id.startsWith('prototype-astronaut'));
+    expect(characters).toHaveLength(3);
+    for (const asset of characters) {
+      const gltf = JSON.parse(readFileSync(resolve('public', asset.runtimePath.slice(1)), 'utf8')) as {
+        animations: Array<{ channels: Array<{ target: { node: number } }>; name: string }>;
+        skins: Array<{ joints: number[] }>;
+      };
+      const joints = new Set(gltf.skins[0]?.joints ?? []);
+      expect(joints.size).toBeGreaterThan(0);
+      for (const name of ['Idle', 'Walk']) {
+        expect(asset.animationClips).toContain(name);
+        const clip = gltf.animations.find((animation) => animation.name === name);
+        expect(clip, `${asset.id} ${name}`).toBeDefined();
+        expect(clip?.channels.length).toBeGreaterThan(0);
+        expect(clip?.channels.every(({ target }) => joints.has(target.node))).toBe(true);
+      }
+    }
+  });
 });
