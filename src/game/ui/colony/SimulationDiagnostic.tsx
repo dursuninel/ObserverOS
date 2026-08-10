@@ -32,10 +32,13 @@ export function SimulationDiagnostic() {
       <div className="simulation-diagnostic-heading"><span>{t('simulationDiagnostic.title')}</span><span>DEV · PHASE 2</span></div>
       <dl className="simulation-diagnostic-time">
         <div><dt>DAY</dt><dd>{view.time.dayIndex}</dd></div>
-        <div><dt>LOCAL</dt><dd>{view.localTime}</dd></div>
+        <div><dt>LOCAL (SIM)</dt><dd>{view.localTime}</dd></div>
         <div><dt>PHASE</dt><dd>{view.time.dayPhase}</dd></div>
         <div><dt>ELAPSED</dt><dd>{view.elapsedMinutes}</dd></div>
         <div><dt>SPEED</dt><dd>{view.speed === 0 ? 'Pause' : `×${view.speed}`}</dd></div>
+        <div><dt>SIM STEP</dt><dd>{view.simStepMinutes} dk</dd></div>
+        <div><dt>×1 RATE</dt><dd>1 sim dk ≈ {view.x1RealSecondsPerSimulationMinute.toFixed(3)} gerçek sn</dd></div>
+        <div><dt>WORLD PRESENTATION</dt><dd>{view.worldPresentation}</dd></div>
       </dl>
       <div aria-label={t('simulationDiagnostic.speedControls')} className="simulation-diagnostic-actions">
         {SIMULATION_SPEEDS.map((speed) => <button aria-pressed={view.speed === speed} key={speed} onClick={() => engine.setSpeed(speed)} type="button">{speed === 0 ? 'Pause' : `×${speed}`}</button>)}
@@ -61,4 +64,3 @@ export function SimulationDiagnostic() {
     </section>
   );
 }
-

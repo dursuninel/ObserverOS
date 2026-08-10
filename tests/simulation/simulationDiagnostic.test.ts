@@ -8,7 +8,14 @@ describe('Phase 2 simulation diagnostic model', () => {
     const engine = new SimulationEngine();
     engine.advanceFixedSteps(60);
     const view = createSimulationDiagnosticView(engine.getSnapshot());
-    expect(view).toMatchObject({ elapsedMinutes: 60, localTime: '01:00', speed: 1 });
+    expect(view).toMatchObject({
+      elapsedMinutes: 60,
+      localTime: '01:00',
+      simStepMinutes: 1,
+      speed: 1,
+      worldPresentation: 'RUNNING',
+      x1RealSecondsPerSimulationMinute: 25 / 60,
+    });
     expect(view.mine).toMatchObject({ energyPriority: 'normal', id: 'mine-01', mode: 'normal', state: 'online' });
     expect(view.resources.find(({ id }) => id === 'material')?.productionRate).toBe(12);
     expect(view.resources.find(({ id }) => id === 'material')?.stored).toBeCloseTo(12);

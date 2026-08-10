@@ -2,6 +2,7 @@ import type { FacilityCommandResult } from '../../domain/facilities/Facility';
 import { RESOURCE_IDS } from '../../domain/resources/Resource';
 import type { SimulationEngine } from '../../simulation/SimulationEngine';
 import type { SimulationSnapshot } from '../../simulation/SimulationSnapshot';
+import { PHASE_TWO_BASELINE_CONFIG } from '../../simulation/SimulationConfig';
 
 export type MineDiagnosticCommand = 'boost' | 'eco' | 'normal' | 'offline' | 'online';
 
@@ -17,8 +18,11 @@ export function createSimulationDiagnosticView(snapshot: SimulationSnapshot) {
       const resource = snapshot.resources[id];
       return Object.freeze({ ...resource, id, netRate: resource.productionRate - resource.consumptionRate });
     })),
+    simStepMinutes: PHASE_TWO_BASELINE_CONFIG.clock.fixedStepMinutes,
     speed: snapshot.clock.speed,
     time: snapshot.time,
+    worldPresentation: snapshot.clock.speed === 0 ? 'PAUSED' : 'RUNNING',
+    x1RealSecondsPerSimulationMinute: PHASE_TWO_BASELINE_CONFIG.clock.realSecondsPerSimulationHour / 60,
   });
 }
 
@@ -37,4 +41,3 @@ export function submitMineDiagnosticCommand(
     value: modeCommand ? command : command,
   });
 }
-

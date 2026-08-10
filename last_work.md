@@ -354,3 +354,46 @@ Test 2 kullanıcı görsel incelemesinden geçmedi. Test 2 ile kurulan ortak `Pr
 - Commit veya push yapılmadı; Faz 2 kullanıcı onayı bekleniyor.
 
 ---
+
+## Faz 2 — Test 3 / Simulation-Presentation Sync & Pause Invariant
+
+**Durum:** Kullanıcı onayı için hazır
+**Tarih:** 10 Ağustos 2026
+
+### Genel özet
+
+- Kanonik zaman ölçeği korunmuştur: temel step 1 simulation dakikası, ×1 hızda 1 simulation dakikası yaklaşık 0,417 gerçek saniyedir.
+- Kök neden, Faz 1 world presentation bileşenlerinin authoritative simulation speed yerine R3F `clock.elapsedTime` ve ham render delta kullanmasıydı.
+- Authoritative `SimulationSnapshot.clock.speed` tüketen, gameplay state taşımayan `PresentationClock` ve React/R3F adapter sınırı eklendi.
+- Colonist rota/pose sunumu, maintenance worker rota ve activity sunumu, GLTF animation mixer, facility activity pulse, snow ve local frozen haze bu presentation clock'a bağlandı.
+- Pause sırasında presentation elapsed/delta ilerlemez; Resume ve speed değişiklikleri clock'u sıfırlamaz. ×2 ve ×4 world presentation progression'ı sırasıyla ölçekler.
+- Kamera pan/zoom/focus/reset ve performans metriği render-time üzerinde bırakıldı; Pause sırasında UI ve kamera etkileşimi çalışmaya devam eder.
+- DEV diagnostic `LOCAL (SIM)`, `SIM STEP 1 dk`, `×1 RATE 1 sim dk ≈ 0.417 gerçek sn` ve `WORLD PRESENTATION RUNNING/PAUSED` açıklamalarını gösterir.
+
+### R3F time-source audit
+
+- Simulation-driven presentation: colonist, maintenance, facility pulse, maintenance sparks, GLTF mixer, snow ve haze yalnız presentation time kullanır.
+- Render-time kalanlar: `CameraRig` etkileşim interpolasyonu ve `MetricsProbe` FPS/frame-time ölçümü. Bunlar gameplay/world progression değildir ve Pause sırasında çalışmalıdır.
+- World renderer'da doğrudan `clock.elapsedTime`, `Date.now`, `performance.now`, timer veya browser-time gameplay kullanımı kalmamıştır.
+
+### Doğrulama
+
+- Lint: PASS — 0 hata, 0 uyarı
+- Typecheck: PASS
+- Test: PASS — 17 test dosyası, 101 test
+- Headless determinism/presentation/architecture matrisi: PASS — 7 dosya, 54 test
+- Production build: PASS — yalnız mevcut büyük bundle/chunk uyarısı sürüyor
+- `git diff --check`: PASS — yalnız Windows LF/CRLF bilgilendirme uyarıları var
+- Tarayıcı ×1: 1,25 gerçek saniyede 3 simulation dakikası ilerledi.
+- Tarayıcı ×2/×4: aynı gözlem aralığında sırasıyla 6/12 simulation dakikası ilerledi; world görüntüsü de ilerledi.
+- Tarayıcı Pause: LOCAL/ELAPSED durdu; world/canvas bölgesinden 1 saniye arayla alınan kareler byte düzeyinde aynı kaldı.
+- Pause sırasında kamera pan, zoom, “Koloniyi göster”, panel ve Mine command etkileşimi çalıştı.
+- Maintenance, snow, haze ve facility activity birlikte görünürken izole world/canvas kareleri Pause boyunca aynı kaldı; Resume'da tekrar ilerledi.
+
+### Kapsam sınırı ve deferred
+
+- Faz 3 Workforce assignment, gerçek travel task, Condition/wear, Maintenance queue/material/time ve failure/recovery uygulanmadı.
+- Prototype presentation schedule gameplay truth yapılmadı; yalnız authoritative speed ile görsel senkron sağlandı.
+- Yeni dependency eklenmedi. Commit veya push yapılmadı.
+
+---

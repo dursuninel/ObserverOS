@@ -309,6 +309,8 @@ select {
   margin: 0;
 }
 
+.simulation-diagnostic-time div:last-child { grid-column: span 2; }
+
 .simulation-diagnostic-time div,
 .simulation-mine-state div {
   background: rgba(116, 163, 173, 0.07);
