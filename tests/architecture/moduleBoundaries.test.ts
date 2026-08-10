@@ -201,4 +201,15 @@ describe('module boundaries', () => {
     expect(source).not.toContain('[animation, object]');
     expect(source).not.toContain('mixer.stopAllAction()');
   });
+
+  it('keeps animated runtime assets hidden until an evaluated weighted action is ready', () => {
+    const source = readFileSync(resolve(sourceRoot, 'game/world/renderer/RuntimeAsset.tsx'), 'utf8');
+    const activateIndex = source.indexOf('animationController.activate(animation)');
+    const readyIndex = source.indexOf('animationController.isReady()');
+    const visibleIndex = source.indexOf('presentationRoot.current.visible = true');
+    expect(source).toContain('visible={asset.animationClips === undefined}');
+    expect(activateIndex).toBeGreaterThan(-1);
+    expect(readyIndex).toBeGreaterThan(activateIndex);
+    expect(visibleIndex).toBeGreaterThan(readyIndex);
+  });
 });

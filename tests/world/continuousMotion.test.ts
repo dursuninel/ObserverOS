@@ -154,20 +154,27 @@ describe('continuous authoritative motion presentation', () => {
 });
 
 interface FakeAction extends Partial<AnimationAction> {
+  clampWhenFinished: boolean;
   crossFades: string[];
+  effectiveWeight: number;
+  enabled: boolean;
   name: string;
   plays: number;
   resets: number;
+  running: boolean;
 }
 
 function fakeAction(name: string, sequence: string[]): FakeAction {
   const action: FakeAction = {
-    crossFades: [], name, plays: 0, resets: 0,
+    clampWhenFinished: true, crossFades: [], effectiveWeight: 1, enabled: false, name, plays: 0, resets: 0, running: false,
     crossFadeTo(next) { action.crossFades.push((next as unknown as FakeAction).name); sequence.push(`crossfade:${name}->${(next as unknown as FakeAction).name}`); return action as AnimationAction; },
-    play() { action.plays += 1; sequence.push(`play:${name}`); return action as AnimationAction; },
+    getEffectiveWeight() { return action.effectiveWeight; },
+    isRunning() { return action.running; },
+    play() { action.plays += 1; action.running = true; sequence.push(`play:${name}`); return action as AnimationAction; },
     reset() { action.resets += 1; sequence.push(`reset:${name}`); return action as AnimationAction; },
+    setLoop() { sequence.push(`loop:${name}`); return action as AnimationAction; },
     setEffectiveTimeScale() { return action as AnimationAction; },
-    setEffectiveWeight() { return action as AnimationAction; },
+    setEffectiveWeight(weight) { action.effectiveWeight = weight; return action as AnimationAction; },
   };
   return action;
 }
@@ -194,6 +201,26 @@ describe('stable character animation lifecycle', () => {
     controller.activate('Idle');
     expect(sequence).toContain('crossfade:Walk->Idle');
     expect(controller.getActiveName()).toBe('Idle');
+    expect(controller.isReady()).toBe(true);
+  });
+
+  it('keeps a positive enabled action through ten Idle/Walk transitions', () => {
+    const idle = fakeAction('Idle', []);
+    const walk = fakeAction('Walk', []);
+    const actions = new Map([['Idle', idle], ['Walk', walk]]);
+    const updates: number[] = [];
+    const mixer = {
+      clipAction: (clip: AnimationClip) => actions.get(clip.name) as AnimationAction,
+      stopAllAction: () => undefined,
+      update: (delta: number) => updates.push(delta),
+    } as unknown as AnimationMixer;
+    const controller = new CharacterAnimationController(mixer, [{ name: 'Idle' }, { name: 'Walk' }] as AnimationClip[], {} as Object3D);
+    for (let index = 0; index < 10; index += 1) {
+      const name = index % 2 === 0 ? 'Idle' : 'Walk';
+      controller.activate(name);
+      expect(controller.getActiveState()).toMatchObject({ effectiveWeight: 1, enabled: true, name, running: true });
+    }
+    expect(updates).toEqual(Array.from({ length: 10 }, () => 0));
   });
 
   it('fails fast for invalid clips and scales mixer time only through presentation delta', () => {
@@ -206,6 +233,6 @@ describe('stable character animation lifecycle', () => {
     controller.update(0);
     controller.update(0.2);
     controller.update(0.4);
-    expect(updates).toEqual([0, 0.2, 0.4]);
+    expect(updates).toEqual([0, 0, 0.2, 0.4]);
   });
 });

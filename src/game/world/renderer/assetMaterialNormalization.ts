@@ -3,7 +3,9 @@ import { BufferGeometry, Color, Material, Mesh, MeshStandardMaterial, Object3D }
 import type { AssetDefinition } from '../assets/AssetRegistry';
 
 export function normalizeAssetMaterials(root: Object3D, asset: AssetDefinition): void {
+  const hiddenNodeNames = new Set(asset.hiddenNodeNames ?? []);
   root.traverse((node) => {
+    if (hiddenNodeNames.has(node.name)) node.visible = false;
     if (!(node instanceof Mesh)) return;
     const mesh = node as Mesh<BufferGeometry, Material | Material[]>;
     mesh.castShadow = asset.shadowProfile !== 'ground';
