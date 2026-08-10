@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { PrototypeDebugState, WorldMetrics } from '../../world/prototype/types';
+import { SimulationDiagnostic } from './SimulationDiagnostic';
 
 interface PrototypeDebugPanelProps {
   readonly metrics: WorldMetrics;
@@ -34,6 +35,7 @@ export function PrototypeDebugPanel({ metrics, onCameraPreset, onChange, onToggl
       <dl className="performance-grid">
         <div><dt>FPS</dt><dd>{metrics.fps}</dd></div><div><dt>ms</dt><dd>{metrics.frameTimeMs}</dd></div><div><dt>Draw</dt><dd>{metrics.drawCalls}</dd></div><div><dt>Tri</dt><dd>{metrics.triangleCount}</dd></div><div><dt>Geo</dt><dd>{metrics.geometryCount}</dd></div><div><dt>Tex</dt><dd>{metrics.textureCount}</dd></div><div><dt>Light</dt><dd>{metrics.lightCount}</dd></div><div><dt>Particles</dt><dd>{metrics.particleCount}</dd></div>
       </dl>
+      {import.meta.env.DEV && <SimulationDiagnostic />}
       </>}
     </aside>
   );
