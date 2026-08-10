@@ -8,7 +8,7 @@ export const tr = {
   },
   prototype: {
     worldStatus: 'SİMÜLASYONA BAĞLI DÜNYA',
-    debug: { badge: 'DEV · FAZ 3', title: 'PROTOTİP KONTROLLERİ', hide: 'Paneli gizle', show: 'Kontrolleri göster', time: 'Günün zamanı', snow: 'Kar', fog: 'Sis', reactor: 'Reaktör durumu', mine: 'Maden durumu', colonists: 'Kolonici sayısı', camera: 'Kamera odağı', quality: 'Kalite profili', safeAreas: 'Güvenli alan maskeleri' },
+    debug: { badge: 'DEV · FAZ 4', title: 'PROTOTİP KONTROLLERİ', hide: 'Paneli gizle', show: 'Kontrolleri göster', time: 'Günün zamanı', snow: 'Kar', fog: 'Sis', reactor: 'Reaktör durumu', mine: 'Maden durumu', colonists: 'Kolonici sayısı', camera: 'Kamera odağı', quality: 'Kalite profili', safeAreas: 'Güvenli alan maskeleri' },
     states: { normal: 'Normal', boost: 'Boost', interlocked: 'Güvenlik kilidinde', maintenance: 'Bakımda', working: 'Çalışıyor', offline: 'Çevrimdışı' },
     camera: { overview: 'Genel görünüm', reset: 'Koloniyi göster', reactor: 'Reaktör', mine: 'Maden', habitat: 'Habitat' },
     quality: { low: 'Düşük', medium: 'Orta', high: 'Yüksek' },
@@ -16,6 +16,10 @@ export const tr = {
     legend: { pan: 'Sürükle: kamerayı kaydır', zoom: 'Tekerlek: yakınlaştır' },
     inspector: { asset: 'Çalışma asset kimliği', chain: 'Üst nesne zinciri', object: 'Nesne / mesh', parent: 'Üst nesne', position: 'Dünya konumu', prompt: 'İncelemek için dünyadaki bir nesneye tıklayın.', source: 'Kaynak paket', title: 'DEV NESNE İNCELEYİCİ', toggle: 'Nesne inceleyiciyi etkinleştir' },
     metrics: { draw: 'Çizim', geometry: 'Geometri', lights: 'Işık', particles: 'Parçacık', textures: 'Doku', triangles: 'Üçgen' },
+  },
+  layoutReview: {
+    adjacency: 'YAKINLIK', candidate: 'ADAY {{letter}}', composition: 'KOMPOZİSYON', connected: 'Bağlı', expansion: 'GENİŞLEME', navigation: 'NAVİGASYON', newSeed: 'Yeni Tohum Üret', next: 'Sonraki Aday', notFrozen: 'DEV önizleme · nihai seçim değil', overlay: 'Yerleşim doğrulama katmanı', previous: 'Önceki Aday', productionPending: 'Nihai yerleşim kullanıcı seçimi sonrasında dondurulacaktır.', profile: 'PROFİL', readability: 'EKRAN OKUNABİLİRLİĞİ', road: 'YOL KALİTESİ', roadNetwork: 'YOL AĞI', seed: 'TOHUM', styles: { Compact: 'Kompakt', Distributed: 'Dağıtık', Linear: 'Doğrusal' }, terrain: 'ARAZİ KULLANIMI', title: 'YERLEŞİM ADAYLARI', total: 'TOPLAM PUAN', valid: 'GEÇERLİ', yes: 'Evet',
+    seedSweep: { averageCandidates: 'ORTALAMA ADAY', averageMs: 'ORTALAMA ÜRETİM SÜRESİ', failed: 'BAŞARISIZ', highest: 'EN YÜKSEK PUAN', lowest: 'EN DÜŞÜK PUAN', tested: 'TEST EDİLEN TOHUM', title: 'TOHUM TARAMASI', valid: 'GEÇERLİ' },
   },
   simulationDiagnostic: {
     actions: {

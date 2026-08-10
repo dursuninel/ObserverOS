@@ -6,6 +6,7 @@ export const DEFAULT_PROTOTYPE_STATE: PrototypeDebugState = {
   cameraPreset: 'overview',
   fogEnabled: true,
   objectInspectorEnabled: false,
+  layoutOverlayVisible: false,
   quality: 'high',
   safeAreasVisible: false,
   snowEnabled: true,

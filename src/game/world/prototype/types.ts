@@ -17,6 +17,7 @@ export interface PrototypeDebugState {
   readonly cameraPreset: CameraPreset;
   readonly fogEnabled: boolean;
   readonly objectInspectorEnabled: boolean;
+  readonly layoutOverlayVisible: boolean;
   readonly quality: QualityProfileId;
   readonly safeAreasVisible: boolean;
   readonly snowEnabled: boolean;

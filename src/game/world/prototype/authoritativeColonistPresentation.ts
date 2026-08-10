@@ -1,4 +1,6 @@
 import type { ColonistState } from '../../domain/workforce/Workforce';
+import { getGeneratedFacility, getGeneratedRoadNode } from '../layout/layoutQueries';
+import type { GeneratedPlanetLayout } from '../layout/layoutTypes';
 import { getPolylineDistance, type CharacterAnimation } from './navigation';
 import { getFacilityPlacement, getFacilityWorkPoint, getHabitatPresentationPoints, getRoadNode, type Point2 } from './prototypeLayout';
 import type { FacilityId } from './types';
@@ -29,11 +31,11 @@ function layoutFacility(instanceId: string): FacilityId | null {
   return facilityByInstanceId[instanceId] ?? null;
 }
 
-function sourcePoint(locationId: string, index: number): Point2 {
+function sourcePoint(locationId: string, index: number, layout?: GeneratedPlanetLayout): Point2 {
   const facility = layoutFacility(locationId);
-  if (facility !== null) return getRoadNode(`${facility}-entrance`).position;
-  const habitat = getHabitatPresentationPoints();
-  return habitat.departurePoints[index % habitat.departurePoints.length] ?? getRoadNode('habitat-entrance').position;
+  if (facility !== null) return layout ? getGeneratedRoadNode(layout, `${facility}-entrance`).position : getRoadNode(`${facility}-entrance`).position;
+  const habitat = getHabitatPresentationPoints(layout ? getGeneratedFacility(layout, 'habitat') : undefined);
+  return habitat.departurePoints[index % habitat.departurePoints.length] ?? (layout ? getGeneratedRoadNode(layout, 'habitat-entrance').position : getRoadNode('habitat-entrance').position);
 }
 
 function interpolate(points: readonly Point2[], progress: number, laneOffset: number): AuthoritativeColonistPose {
@@ -60,44 +62,45 @@ function interpolate(points: readonly Point2[], progress: number, laneOffset: nu
   return { activity: false, animation: 'Walk', position: toWorld(points.at(-1) ?? [0, 0]), rotationY: 0, visible: true };
 }
 
-function habitatPose(colonist: ColonistState): AuthoritativeColonistPose {
+function habitatPose(colonist: ColonistState, layout?: GeneratedPlanetLayout): AuthoritativeColonistPose {
   const index = stableIndex(colonist.id);
-  const points = getHabitatPresentationPoints().restPoints;
-  const point = points[index % points.length] ?? getFacilityPlacement('habitat').position;
+  const placement = layout ? getGeneratedFacility(layout, 'habitat') : getFacilityPlacement('habitat');
+  const points = getHabitatPresentationPoints(placement).restPoints;
+  const point = points[index % points.length] ?? placement.position;
   return { activity: false, animation: 'Idle', position: toWorld(point), rotationY: index * 0.71 % (Math.PI * 2), visible: false };
 }
 
-export function getAuthoritativeColonistPose(colonist: ColonistState): AuthoritativeColonistPose {
+export function getAuthoritativeColonistPose(colonist: ColonistState, layout?: GeneratedPlanetLayout): AuthoritativeColonistPose {
   const assignment = colonist.assignment;
   const travel = colonist.travel;
   const index = stableIndex(colonist.id);
   if (travel !== null) {
-    const source = sourcePoint(travel.sourceLocationId, index);
+    const source = sourcePoint(travel.sourceLocationId, index, layout);
     const target = layoutFacility(travel.targetLocationId);
-    const road = travel.routeNodeIds.map((nodeId) => getRoadNode(nodeId).position);
-    const habitat = getHabitatPresentationPoints();
+    const road = travel.routeNodeIds.map((nodeId) => layout ? getGeneratedRoadNode(layout, nodeId).position : getRoadNode(nodeId).position);
+    const habitat = getHabitatPresentationPoints(layout ? getGeneratedFacility(layout, 'habitat') : undefined);
     const destination = travel.targetLocationId === 'habitat'
-      ? habitat.restPoints[index % habitat.restPoints.length] ?? getRoadNode('habitat-entrance').position
+      ? habitat.restPoints[index % habitat.restPoints.length] ?? (layout ? getGeneratedRoadNode(layout, 'habitat-entrance').position : getRoadNode('habitat-entrance').position)
       : target === null
         ? road.at(-1) ?? source
         : travel.taskType === 'maintenance'
-          ? getFacilityWorkPoint(target)
-          : getRoadNode(`${target}-entrance`).position;
+          ? layout ? getGeneratedFacility(layout, target).workPoint : getFacilityWorkPoint(target)
+          : layout ? getGeneratedRoadNode(layout, `${target}-entrance`).position : getRoadNode(`${target}-entrance`).position;
     const points = [source, ...road, destination].filter((point, pointIndex, all) => pointIndex === 0 || point[0] !== all[pointIndex - 1]?.[0] || point[1] !== all[pointIndex - 1]?.[1]);
     const progress = travel.durationMinutes === 0 ? 1 : travel.elapsedMinutes / travel.durationMinutes;
     return interpolate(points, progress, (index % 5 - 2) * (travel.purpose === 'return-to-habitat' ? -0.08 : 0.08));
   }
-  if (assignment === null) return habitatPose(colonist);
+  if (assignment === null) return habitatPose(colonist, layout);
   const target = layoutFacility(assignment.facilityId);
-  if (target === null) return habitatPose(colonist);
+  if (target === null) return habitatPose(colonist, layout);
   if (assignment.phase === 'on-site') {
     if (assignment.taskType === 'maintenance') {
-      const point = getFacilityWorkPoint(target);
-      const facility = getFacilityPlacement(target).position;
+      const point = layout ? getGeneratedFacility(layout, target).workPoint : getFacilityWorkPoint(target);
+      const facility = layout ? getGeneratedFacility(layout, target).position : getFacilityPlacement(target).position;
       return { activity: true, animation: 'Idle', position: toWorld(point), rotationY: Math.atan2(facility[0] - point[0], facility[1] - point[1]), visible: false };
     }
-    const entrance = getRoadNode(`${target}-entrance`).position;
+    const entrance = layout ? getGeneratedRoadNode(layout, `${target}-entrance`).position : getRoadNode(`${target}-entrance`).position;
     return { activity: false, animation: 'Idle', position: toWorld(entrance), rotationY: Math.PI, visible: false };
   }
-  return habitatPose(colonist);
+  return habitatPose(colonist, layout);
 }

@@ -285,6 +285,35 @@ select {
 .performance-grid dt { color: #779198; font-size: 0.55rem; }
 .performance-grid dd { color: #dff7f7; font-size: 0.72rem; margin: 0.1rem 0 0; }
 
+.layout-candidate-panel {
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem 0;
+}
+
+.layout-candidate-title { align-items: baseline; display: flex; justify-content: space-between; }
+.layout-candidate-title strong { color: #9bd6da; font-size: 0.61rem; letter-spacing: 0.08em; }
+.layout-candidate-title small { color: #78959b; font-size: 0.5rem; }
+.layout-candidate-buttons, .layout-review-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.layout-candidate-buttons button, .layout-review-actions button {
+  background: #10252d;
+  border: 1px solid #294550;
+  color: #bcd3d7;
+  font-size: 0.53rem;
+  min-height: 1.55rem;
+  padding: 0.2rem 0.33rem;
+}
+.layout-candidate-buttons button.selected { border-color: var(--cyan); color: #fff; }
+.layout-review-actions button:disabled { opacity: 0.35; }
+.layout-score-grid { display: grid; gap: 0.22rem; grid-template-columns: repeat(3, 1fr); margin: 0; }
+.layout-score-grid div { background: rgba(116, 163, 173, 0.07); padding: 0.26rem; }
+.layout-score-grid dt { color: #779198; font-size: 0.46rem; }
+.layout-score-grid dd { color: #dff7f7; font-size: 0.58rem; margin: 0.08rem 0 0; }
+.layout-candidate-panel details { color: #8eb0b6; font-size: 0.54rem; }
+.layout-candidate-panel details[open] summary { margin-bottom: 0.35rem; }
+
 .simulation-diagnostic {
   border-top: 1px solid var(--line);
   display: grid;
@@ -439,7 +468,7 @@ select {
     top: auto;
     width: auto;
   }
-  .debug-panel-heading, .performance-grid, .simulation-diagnostic { grid-column: 1 / -1; }
+  .debug-panel-heading, .layout-candidate-panel, .performance-grid, .simulation-diagnostic { grid-column: 1 / -1; }
   .prototype-debug-panel > label { min-width: 0; }
   .prototype-legend { bottom: calc(38% + 0.7rem); }
   .safe-mask-right { bottom: 38%; right: 0; top: 0; width: 100%; }
