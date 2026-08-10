@@ -61,7 +61,15 @@ export function SimulationDiagnostic() {
         <div><dt>ASSIGNED</dt><dd>{view.workforce.assigned}</dd></div>
         <div><dt>AVAILABLE</dt><dd>{view.workforce.available}</dd></div>
         <div><dt>RESTING</dt><dd>{view.workforce.resting}</dd></div>
+        <div><dt>TRAVELING</dt><dd>{view.workforce.traveling}</dd></div>
       </dl>
+      <div className="simulation-travel-list">
+        {view.travels.length === 0 ? <small>TRAVEL: none</small> : view.travels.map((travel) => <div key={travel.colonistId}>
+          <strong>{travel.colonistId}</strong>
+          <span>FROM {travel.from} → TO {travel.to}</span>
+          <small>{travel.purpose.toUpperCase()} · PROGRESS {(travel.progress * 100).toFixed(0)}% · REMAINING {display(travel.remainingMinutes)} sim dk</small>
+        </div>)}
+      </div>
       <div className="simulation-resource-list">
         {view.resources.map((resource) => <div data-resource={resource.id} key={resource.id}>
           <strong>{resource.id.toUpperCase()}</strong>

@@ -1,5 +1,6 @@
 import type { FacilityDefinition } from '../domain/facilities/Facility';
 import type { ResourceId, ResourceRates } from '../domain/resources/Resource';
+import type { TravelNetworkConfig } from '../domain/workforce/TravelNetwork';
 import type { SimulationClockConfig, SimulationSpeed } from './SimulationClock';
 
 export const PHASE_THREE_WORKFORCE_BASELINES = Object.freeze({
@@ -23,6 +24,35 @@ export const PHASE_THREE_MAINTENANCE_BASELINES = Object.freeze({
   'thermal-control': Object.freeze({ workforce: 1, material: 5, durationMinutes: 120, restoreCondition: 95, offlineDuringMaintenance: true }),
 });
 
+export const PHASE_THREE_TRAVEL_NETWORK: TravelNetworkConfig = Object.freeze({
+  edges: Object.freeze([
+    { from: 'spine-solar', to: 'spine-reactor' }, { from: 'spine-reactor', to: 'spine-battery' },
+    { from: 'spine-battery', to: 'spine-habitat' }, { from: 'spine-habitat', to: 'spine-oxygen' },
+    { from: 'spine-oxygen', to: 'spine-mine' }, { from: 'spine-mine', to: 'spine-expansion' },
+    ...['solar', 'reactor', 'battery', 'habitat', 'oxygen', 'mine', 'expansion'].flatMap((id) => [
+      { from: `spine-${id}`, to: `${id}-approach` }, { from: `${id}-approach`, to: `${id}-entrance` },
+    ]),
+  ]),
+  locationNodes: Object.freeze({
+    'battery-01': 'battery-entrance', habitat: 'habitat-entrance', 'mine-01': 'mine-entrance',
+    'oxygen-processor-01': 'oxygen-entrance', 'reactor-01': 'reactor-entrance',
+  }),
+  nodes: Object.freeze([
+    { id: 'spine-solar', x: -6.5, z: 0 }, { id: 'spine-reactor', x: -4, z: 0 },
+    { id: 'spine-battery', x: -1, z: 0 }, { id: 'spine-habitat', x: 1.5, z: 0 },
+    { id: 'spine-oxygen', x: 4.5, z: 0 }, { id: 'spine-mine', x: 7, z: 0 },
+    { id: 'spine-expansion', x: 9.5, z: 0 },
+    { id: 'solar-approach', x: -6.5, z: 0.75 }, { id: 'solar-entrance', x: -6.5, z: 1.7 },
+    { id: 'reactor-approach', x: -4, z: -0.75 }, { id: 'reactor-entrance', x: -4, z: -1.4 },
+    { id: 'battery-approach', x: -1, z: 0.75 }, { id: 'battery-entrance', x: -1, z: 1.6 },
+    { id: 'habitat-approach', x: 1.5, z: -0.75 }, { id: 'habitat-entrance', x: 1.5, z: -1.3 },
+    { id: 'oxygen-approach', x: 4.5, z: 0.75 }, { id: 'oxygen-entrance', x: 4.5, z: 1.4 },
+    { id: 'mine-approach', x: 7, z: -0.75 }, { id: 'mine-entrance', x: 7, z: -1.6 },
+    { id: 'expansion-approach', x: 9.5, z: 0.75 }, { id: 'expansion-entrance', x: 9.5, z: 1.5 },
+  ]),
+  walkingSpeedUnitsPerSimulationMinute: 0.25,
+});
+
 export interface SimulationConfig {
   readonly baseConsumptionPerHour: ResourceRates;
   readonly clock: SimulationClockConfig;
@@ -33,12 +63,11 @@ export interface SimulationConfig {
   readonly maintenanceThreshold?: number;
   readonly population?: Readonly<{
     count: number;
-    maintenanceTravelMinutes: number;
-    operationTravelMinutes: number;
     restCycleMinutes: number;
     restDurationMinutes: number;
     restGroupCount: number;
   }>;
+  readonly travelNetwork?: TravelNetworkConfig;
   readonly wearModeMultipliers?: Readonly<Record<'boost' | 'eco' | 'normal', number>>;
 }
 
@@ -126,12 +155,11 @@ export const PHASE_THREE_BASELINE_CONFIG: SimulationConfig = Object.freeze({
   maintenanceThreshold: 60,
   population: Object.freeze({
     count: 11,
-    maintenanceTravelMinutes: 12,
-    operationTravelMinutes: 1,
-    restCycleMinutes: 1_440,
-    restDurationMinutes: 240,
+    restCycleMinutes: 360,
+    restDurationMinutes: 60,
     restGroupCount: 5,
   }),
+  travelNetwork: PHASE_THREE_TRAVEL_NETWORK,
   wearModeMultipliers: Object.freeze({ eco: 0.5, normal: 1, boost: 2.5 }),
 });
 

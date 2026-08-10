@@ -34,9 +34,9 @@ describe('SimulationEngine Phase 2 core', () => {
     engine.advanceFixedSteps(60);
     const snapshot = engine.getSnapshot();
     expect(snapshot.time.elapsedMinutes).toBe(60);
-    expect(snapshot.resources.energy.stored).toBeCloseTo(232);
-    expect(snapshot.resources.oxygen.stored).toBeCloseTo(145);
-    expect(snapshot.resources.material.stored).toBeCloseTo(12);
+    expect(snapshot.resources.energy.stored).toBeCloseTo(202.9);
+    expect(snapshot.resources.oxygen.stored).toBeCloseTo(135.833333);
+    expect(snapshot.resources.material.stored).toBeCloseTo(5.4);
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.isFrozen(snapshot.time)).toBe(true);
     expect(Object.isFrozen(snapshot.resources.energy)).toBe(true);
@@ -88,9 +88,9 @@ describe('SimulationEngine Phase 2 core', () => {
     expect(eco.submitFacilityCommand(modeCommand(eco, 'command-eco', 'eco')).status).toBe('applied');
     normal.advanceFixedSteps(60);
     eco.advanceFixedSteps(60);
-    expect(normal.getSnapshot().resources.material.stored).toBeCloseTo(12);
-    expect(eco.getSnapshot().resources.material.stored).toBeCloseTo(6);
-    expect(eco.getSnapshot().resources.energy.stored).toBeCloseTo(242);
+    expect(normal.getSnapshot().resources.material.stored).toBeCloseTo(5.4);
+    expect(eco.getSnapshot().resources.material.stored).toBeCloseTo(2.7);
+    expect(eco.getSnapshot().resources.energy.stored).toBeCloseTo(207.4);
     expect(eco.getSnapshot().facilities.find(({ id }) => id === 'mine-01')?.mode).toBe('eco');
   });
 

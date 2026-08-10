@@ -13,6 +13,14 @@ export function createSimulationDiagnosticView(snapshot: SimulationSnapshot) {
   const minutes = (snapshot.time.localMinute % 60).toString().padStart(2, '0');
   return Object.freeze({
     elapsedMinutes: snapshot.time.elapsedMinutes,
+    travels: snapshot.colonists.filter(({ travel }) => travel !== null).slice(0, 4).map(({ id, travel }) => ({
+      colonistId: id,
+      from: travel?.sourceLocationId ?? '',
+      progress: travel === null || travel.durationMinutes === 0 ? 1 : travel.elapsedMinutes / travel.durationMinutes,
+      purpose: travel?.purpose ?? '',
+      remainingMinutes: travel === null ? 0 : travel.durationMinutes - travel.elapsedMinutes,
+      to: travel?.targetLocationId ?? '',
+    })),
     facilities: snapshot.facilities.filter(({ requiredNominalWorkforce, wearRatePerHour }) => requiredNominalWorkforce > 0 || wearRatePerHour > 0),
     localTime: `${hours}:${minutes}`,
     mine,

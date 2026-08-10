@@ -509,3 +509,83 @@ Test 2 kullanıcı görsel incelemesinden geçmedi. Test 2 ile kurulan ortak `Pr
 - Yeni dependency eklenmedi. Commit veya push yapılmadı.
 
 FAZ 3 TEST 1 KULLANICI ONAYI İÇİN HAZIR
+
+---
+
+## Faz 3 — Test 2 / Authoritative Colonist Lifecycle & Living World
+
+**Durum:** Kullanıcı incelemesi için hazır
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-3-workforce-maintenance`
+
+### 1. STATIC WORLD ROOT CAUSE
+
+- Test 1 baseline'ındaki `operationTravelMinutes = 1`, ×1 hızda yalnız yaklaşık 0,417 gerçek saniye görünür yürüyüş üretiyordu.
+- Operation worker on-site olduğunda indoor/hidden sunuma geçtiği için bütün koloninin uzun süre statik görünmesi doğrulandı.
+- `updateRestStates` içindeki `assignment = null`, `locationId = 'habitat'`, `state = 'resting'` immediate relocation davranışı ikinci kök nedendi ve kaldırıldı.
+
+### 2. OPERATION TRAVEL SÜRESİ
+
+- Tek, sabit operation/maintenance travel dakika alanları kaldırıldı.
+- TUNABLE walking speed baseline'ı `0.25 world unit / simulation minute` olarak config'e kondu; mevcut layout'ta ×1 başlangıç yolculukları yaklaşık 10–14 gerçek saniye sürer.
+
+### 3. DISTANCE-BASED TRAVEL
+
+- Three.js bağımlılığı olmayan saf travel network, deterministic route resolver ve mesafe/süre hesabı eklendi.
+- Authoritative task source/target location, purpose, route node IDs, duration, elapsed ve startedAt taşır.
+- Renderer destination seçmez; authoritative route node dizisini aynı görsel road graph üzerinde world pozisyonuna çevirir.
+
+### 4. WORKING → HABITAT RETURN FLOW
+
+- Rest zamanı gelen on-site worker assignment'ı release eder, mevcut facility'den Habitat'a `return-to-habitat` task üretir ve varıştan önce Resting olmaz.
+- Habitat varışında location/state atomik olarak Habitat/Resting olur. Return task save/restore ile deterministik devam eder.
+
+### 5. REST / SHIFT CADENCE
+
+- Staggered invariant korunarak baseline `360 sim dk cycle / 60 sim dk rest / 5 group` olarak yeniden tune edildi.
+- ×1 playtest'te yaklaşık 30 saniyede yeni grup turnover'ı başlar; tüm workforce aynı anda dinlenmeye düşmez.
+
+### 6. INITIAL ASSIGNMENT FLOW
+
+- Yeni simulation başlangıcında worker'lar instant-on-site oluşturulmaz; Habitat kaynaklı gerçek assignment travel ile başlar.
+- Restore edilen on-site worker'ın Habitat'a resetlenmediği regression testi eklendi.
+
+### 7. REASSIGNMENT FLOW
+
+- On-site facility A → facility B reassignment, A kaynaklı ve B hedefli authoritative travel üretir.
+- Aynı valid assignment korunur; gereksiz travel/churn üretilmez. Travel halindeki worker teleport edilmez.
+
+### 8. MAINTENANCE REGRESSION
+
+- Test 1 worker-pool, Material-once, travel, in-progress, completion ve recovery testleri PASS kaldı.
+- Browser'da iki gerçek worker'ın yeniden atanması, Mine'a yürümesi ve 6 Material'ın tek kez tüketilmesi tekrar doğrulandı.
+
+### 9. WORLD PRESENTATION
+
+- Prototype random scheduler geri getirilmedi; decorative/random walker eklenmedi.
+- Resting colonist mevcut Idle animation, deterministic orientation ve Habitat rest points kullanır.
+- DEV diagnostic TRAVELING ile ilk dört task için FROM/TO/PURPOSE/PROGRESS/REMAINING gösterir.
+
+### 10. ×1 / ×2 / ×4 / PAUSE MANUAL RESULTS
+
+- ×1: sekiz başlangıç worker'ı Habitat'tan çıktı; yürüyüş gözle takip edildi. Yaklaşık 36 gerçek saniye içinde iki outbound ve iki return-to-habitat task birlikte gözlendi; worker'lar varıştan sonra Resting oldu.
+- ×2/×4: aynı 3 saniyelik pencerede yaklaşık 15/31 sim dakika ilerledi; lifecycle aynı kaldı.
+- Pause: elapsed ve authoritative travel progress durdu, WORLD PRESENTATION PAUSED oldu. Resume ×1 aynı task progress'inden devam etti.
+
+### 11. TEST RESULTS
+
+- Lint: PASS.
+- Typecheck: PASS.
+- Simulation-only typecheck: PASS.
+- Full test: PASS — 20 dosya, 141 test.
+- Determinism/workforce/maintenance/presentation/architecture matrix: PASS — 7 dosya, 80 test.
+- Production build: PASS — yalnız mevcut büyük chunk uyarısı sürüyor.
+- Yeni dependency eklenmedi; commit veya push yapılmadı.
+
+### 12. FAZ 3 ACCEPTANCE
+
+- Authoritative workforce, deterministic allocation, Condition/wear, maintenance, saveable task state ve PresentationClock korunmuştur.
+- Walking world hareketi yalnız gerçek initial assignment, shift/rest, reassignment ve maintenance lifecycle'ından gelir.
+- Faz 4, Protocol Runtime, fake wandering, yeni colonist main state, Health/Assessment veya save UI uygulanmadı.
+
+FAZ 3 TEST 2 KULLANICI İNCELEMESİ İÇİN HAZIR

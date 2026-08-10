@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { PHASE_THREE_TRAVEL_NETWORK } from '../../src/game/simulation/SimulationConfig';
 import { allRoadNodeIds, findPath } from '../../src/game/world/prototype/navigation';
 import { getFacilityFootprint, getFacilityPlacement, getHabitatPresentationPoints, getRoadNode, getRoadNeighbors, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT, segmentIntersectsFootprint, transformLocalPointToWorld } from '../../src/game/world/prototype/prototypeLayout';
 
 const entityIds = ['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen', 'expansion'] as const;
 
 describe('handcrafted prototype layout', () => {
+  it('shares the authoritative travel nodes and edges with the visual road graph', () => {
+    for (const node of PHASE_THREE_TRAVEL_NETWORK.nodes) {
+      expect(getRoadNode(node.id).position[0]).toBeCloseTo(node.x);
+      expect(getRoadNode(node.id).position[1]).toBeCloseTo(node.z);
+    }
+    const semanticEdges = new Set(PHASE_THREE_TRAVEL_NETWORK.edges.map(({ from, to }) => [from, to].sort().join('>')));
+    const visualEdges = new Set(PROTOTYPE_LAYOUT.roadEdges.map(({ from, to }) => [from, to].sort().join('>')));
+    expect(semanticEdges).toEqual(visualEdges);
+  });
+
   it('connects every facility entrance to the road graph', () => {
     for (const id of entityIds) {
       const entranceId = `${id}-entrance`;

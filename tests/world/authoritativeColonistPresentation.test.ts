@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ColonistState } from '../../src/game/domain/workforce/Workforce';
 import { getAuthoritativeColonistPose } from '../../src/game/world/prototype/authoritativeColonistPresentation';
 
-const base: ColonistState = { assignment: null, id: 'colonist-002', locationId: 'habitat', restGroup: 1, state: 'available' };
+const base: ColonistState = { assignment: null, id: 'colonist-002', locationId: 'habitat', restDue: false, restGroup: 1, state: 'available', travel: null };
 
 describe('authoritative colonist world adapter', () => {
   it('renders Available and Resting colonists at stable habitat positions', () => {
@@ -18,9 +18,9 @@ describe('authoritative colonist world adapter', () => {
       ...base,
       assignment: {
         facilityId: 'mine-01', id: 'work-operate-mine-01', phase: 'traveling', taskType: 'operate',
-        travel: { durationMinutes: 12, elapsedMinutes, id: 'travel-1', sourceLocationId: 'habitat', startedAt: 0, targetFacilityId: 'mine-01', taskType: 'operate' },
       },
       state: 'working',
+      travel: { durationMinutes: 12, elapsedMinutes, id: 'travel-1', purpose: 'to-assignment', routeNodeIds: ['habitat-entrance', 'spine-habitat', 'spine-oxygen', 'spine-mine', 'mine-approach', 'mine-entrance'], sourceLocationId: 'habitat', startedAt: 0, targetLocationId: 'mine-01', taskType: 'operate' },
     });
     const start = getAuthoritativeColonistPose(traveling(0));
     const middle = getAuthoritativeColonistPose(traveling(6));
@@ -32,10 +32,10 @@ describe('authoritative colonist world adapter', () => {
 
   it('hides indoor operation and shows outside maintenance at the work point', () => {
     const operation = getAuthoritativeColonistPose({
-      ...base, state: 'working', assignment: { facilityId: 'mine-01', id: 'work-operate-mine-01', phase: 'on-site', taskType: 'operate', travel: null },
+      ...base, state: 'working', assignment: { facilityId: 'mine-01', id: 'work-operate-mine-01', phase: 'on-site', taskType: 'operate' },
     });
     const maintenance = getAuthoritativeColonistPose({
-      ...base, state: 'working', assignment: { facilityId: 'mine-01', id: 'work-maintenance-mine', phase: 'on-site', taskType: 'maintenance', travel: null },
+      ...base, state: 'working', assignment: { facilityId: 'mine-01', id: 'work-maintenance-mine', phase: 'on-site', taskType: 'maintenance' },
     });
     expect(operation.visible).toBe(false);
     expect(maintenance).toMatchObject({ activity: true, animation: 'Idle', visible: true });

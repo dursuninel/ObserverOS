@@ -1,5 +1,5 @@
 import type { ColonistState } from '../../domain/workforce/Workforce';
-import { findPath, getPolylineDistance, type CharacterAnimation } from './navigation';
+import { getPolylineDistance, type CharacterAnimation } from './navigation';
 import { getFacilityPlacement, getFacilityWorkPoint, getHabitatPresentationPoints, getRoadNode, type Point2 } from './prototypeLayout';
 import type { FacilityId } from './types';
 
@@ -29,11 +29,11 @@ function layoutFacility(instanceId: string): FacilityId | null {
   return facilityByInstanceId[instanceId] ?? null;
 }
 
-function sourcePoint(locationId: string, index: number): { readonly nodeId: string; readonly point: Point2 } {
+function sourcePoint(locationId: string, index: number): Point2 {
   const facility = layoutFacility(locationId);
-  if (facility !== null) return { nodeId: `${facility}-entrance`, point: getRoadNode(`${facility}-entrance`).position };
+  if (facility !== null) return getRoadNode(`${facility}-entrance`).position;
   const habitat = getHabitatPresentationPoints();
-  return { nodeId: 'habitat-entrance', point: habitat.departurePoints[index % habitat.departurePoints.length] ?? getRoadNode('habitat-entrance').position };
+  return habitat.departurePoints[index % habitat.departurePoints.length] ?? getRoadNode('habitat-entrance').position;
 }
 
 function interpolate(points: readonly Point2[], progress: number, laneOffset: number): AuthoritativeColonistPose {
@@ -69,6 +69,24 @@ function habitatPose(colonist: ColonistState): AuthoritativeColonistPose {
 
 export function getAuthoritativeColonistPose(colonist: ColonistState): AuthoritativeColonistPose {
   const assignment = colonist.assignment;
+  const travel = colonist.travel;
+  const index = stableIndex(colonist.id);
+  if (travel !== null) {
+    const source = sourcePoint(travel.sourceLocationId, index);
+    const target = layoutFacility(travel.targetLocationId);
+    const road = travel.routeNodeIds.map((nodeId) => getRoadNode(nodeId).position);
+    const habitat = getHabitatPresentationPoints();
+    const destination = travel.targetLocationId === 'habitat'
+      ? habitat.restPoints[index % habitat.restPoints.length] ?? getRoadNode('habitat-entrance').position
+      : target === null
+        ? road.at(-1) ?? source
+        : travel.taskType === 'maintenance'
+          ? getFacilityWorkPoint(target)
+          : getRoadNode(`${target}-entrance`).position;
+    const points = [source, ...road, destination].filter((point, pointIndex, all) => pointIndex === 0 || point[0] !== all[pointIndex - 1]?.[0] || point[1] !== all[pointIndex - 1]?.[1]);
+    const progress = travel.durationMinutes === 0 ? 1 : travel.elapsedMinutes / travel.durationMinutes;
+    return interpolate(points, progress, (index % 5 - 2) * (travel.purpose === 'return-to-habitat' ? -0.08 : 0.08));
+  }
   if (assignment === null) return habitatPose(colonist);
   const target = layoutFacility(assignment.facilityId);
   if (target === null) return habitatPose(colonist);
@@ -81,13 +99,5 @@ export function getAuthoritativeColonistPose(colonist: ColonistState): Authorita
     const entrance = getRoadNode(`${target}-entrance`).position;
     return { activity: false, animation: 'Idle', position: toWorld(entrance), rotationY: Math.PI, visible: false };
   }
-  const travel = assignment.travel;
-  if (travel === null) return habitatPose(colonist);
-  const index = stableIndex(colonist.id);
-  const source = sourcePoint(travel.sourceLocationId, index);
-  const road = findPath(source.nodeId, `${target}-entrance`).map((nodeId) => getRoadNode(nodeId).position);
-  const destination = assignment.taskType === 'maintenance' ? getFacilityWorkPoint(target) : getRoadNode(`${target}-entrance`).position;
-  const points = [source.point, ...road, destination].filter((point, pointIndex, all) => pointIndex === 0 || point[0] !== all[pointIndex - 1]?.[0] || point[1] !== all[pointIndex - 1]?.[1]);
-  const progress = travel.durationMinutes === 0 ? 1 : travel.elapsedMinutes / travel.durationMinutes;
-  return interpolate(points, progress, (index % 5 - 2) * 0.08);
+  return habitatPose(colonist);
 }

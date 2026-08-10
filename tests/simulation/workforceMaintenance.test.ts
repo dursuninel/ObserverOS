@@ -11,8 +11,17 @@ function command(engine: SimulationEngine, actuator: 'set-condition' | 'set-main
   return engine.submitFacilityCommand({ actuator, facilityId, id, priority: 'normal', simTime: engine.getSnapshot().time.elapsedMinutes, value });
 }
 
-function population(count: number, operationTravelMinutes = 1) {
-  return { count, maintenanceTravelMinutes: 1, operationTravelMinutes, restCycleMinutes: 1_440, restDurationMinutes: 0, restGroupCount: 1 } as const;
+function population(count: number) {
+  return { count, restCycleMinutes: 1_440, restDurationMinutes: 0, restGroupCount: 1 } as const;
+}
+
+function testTravelNetwork(walkingSpeedUnitsPerSimulationMinute: number) {
+  return {
+    edges: [{ from: 'habitat-node', to: 'a-node' }, { from: 'habitat-node', to: 'b-node' }],
+    locationNodes: { 'a-facility': 'a-node', 'b-facility': 'b-node', habitat: 'habitat-node' },
+    nodes: [{ id: 'habitat-node', x: 0, z: 0 }, { id: 'a-node', x: 12, z: 0 }, { id: 'b-node', x: 0, z: 24 }],
+    walkingSpeedUnitsPerSimulationMinute,
+  } as const;
 }
 
 function assignmentConfig(count = 3, minimum = 1, nominal = 2): SimulationConfig {
@@ -141,7 +150,7 @@ describe('Phase 3 workforce foundation', () => {
 
   it('separates Population, Active, Assigned, Available and Resting', () => {
     const summary = new SimulationEngine().getSnapshot().workforce;
-    expect(summary).toEqual({ population: 11, active: 8, assigned: 8, available: 0, resting: 3 });
+    expect(summary).toEqual({ population: 11, active: 8, assigned: 8, available: 0, resting: 3, traveling: 8, travelingToRest: 0 });
     expect(summary.active + summary.resting).toBe(summary.population);
     expect(summary.assigned + summary.available).toBe(summary.active);
   });
@@ -155,29 +164,23 @@ describe('Phase 3 workforce foundation', () => {
   });
 
   it('keeps travel task plain serializable and freezes it during Pause', () => {
-    const config = { ...assignmentConfig(3), population: population(3, 12) };
+    const config = { ...assignmentConfig(3), travelNetwork: testTravelNetwork(1) };
     const engine = new SimulationEngine({ config });
-    command(engine, 'set-operating-state', 'a-facility', 'offline', 'offline-a');
-    engine.advanceFixedSteps(1);
-    command(engine, 'set-operating-state', 'a-facility', 'online', 'online-a');
     const traveling = engine.getSnapshot().colonists.find(({ assignment }) => assignment?.facilityId === 'a-facility');
-    expect(traveling?.assignment?.travel).toMatchObject({ durationMinutes: 12, elapsedMinutes: 0, targetFacilityId: 'a-facility', taskType: 'operate' });
-    expect(JSON.parse(JSON.stringify(traveling?.assignment?.travel))).toEqual(traveling?.assignment?.travel);
+    expect(traveling?.travel).toMatchObject({ durationMinutes: 12, elapsedMinutes: 0, targetLocationId: 'a-facility', taskType: 'operate' });
+    expect(JSON.parse(JSON.stringify(traveling?.travel))).toEqual(traveling?.travel);
     engine.setSpeed(0);
     engine.advanceWallTime(25_000);
-    expect(engine.getSnapshot().colonists.find(({ id }) => id === traveling?.id)?.assignment?.travel?.elapsedMinutes).toBe(0);
+    expect(engine.getSnapshot().colonists.find(({ id }) => id === traveling?.id)?.travel?.elapsedMinutes).toBe(0);
   });
 
   it('scales travel progression deterministically at ×1/×2/×4', () => {
     const progress = (speed: 1 | 2 | 4) => {
-      const config = { ...assignmentConfig(3), population: population(3, 300) };
+      const config = { ...assignmentConfig(3), travelNetwork: testTravelNetwork(0.04) };
       const engine = new SimulationEngine({ config });
-      command(engine, 'set-operating-state', 'a-facility', 'offline', `offline-${speed}`);
-      engine.advanceFixedSteps(1);
-      command(engine, 'set-operating-state', 'a-facility', 'online', `online-${speed}`);
       engine.setSpeed(speed);
       engine.advanceWallTime(25_000);
-      return engine.getSnapshot().colonists.find(({ assignment }) => assignment?.facilityId === 'a-facility')?.assignment?.travel?.elapsedMinutes;
+      return engine.getSnapshot().colonists.find(({ assignment }) => assignment?.facilityId === 'a-facility')?.travel?.elapsedMinutes;
     };
     expect([progress(1), progress(2), progress(4)]).toEqual([60, 120, 240]);
   });
@@ -272,6 +275,7 @@ describe('Phase 3 condition, wear and maintenance', () => {
   it('pulls maintenance workers from the real shared workforce pool', () => {
     const config = { ...PHASE_THREE_BASELINE_CONFIG, initialResources: { ...PHASE_THREE_BASELINE_CONFIG.initialResources, material: 6 } };
     const engine = new SimulationEngine({ config });
+    engine.advanceFixedSteps(40);
     const before = engine.getSnapshot().facilities.map(({ assignedWorkforce, id }) => [id, assignedWorkforce]);
     command(engine, 'set-condition', 'mine-01', 59, 'mine-maintenance-request');
     command(engine, 'set-maintenance-priority', 'mine-01', 'high', 'mine-maintenance-high');
