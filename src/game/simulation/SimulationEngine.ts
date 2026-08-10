@@ -103,7 +103,7 @@ export class SimulationEngine {
     for (const definition of this.config.facilities) this.facilities.set(definition.id, createFacilityState(definition));
     this.resources = createResourcePool(this.config.initialResources);
     this.colonists = createColonists(this.config);
-    this.reallocateWorkforce(true, false);
+    this.reallocateWorkforce(false, false);
     applyFacilityWear(0, this.config.facilities, this.facilities, this.config);
     updateResourceLedger(0, this.config.baseConsumptionPerHour, this.config.facilities, this.facilities, this.resources);
     this.snapshot = this.createSnapshot();
@@ -371,10 +371,8 @@ export class SimulationEngine {
     Object.assign(this.resources.oxygen, state.resources.oxygen);
     this.colonists.splice(0, this.colonists.length, ...state.colonists.map((colonist) => ({
       ...colonist,
-      assignment: colonist.assignment === null ? null : {
-        ...colonist.assignment,
-        travel: colonist.assignment.travel === null ? null : { ...colonist.assignment.travel },
-      },
+      assignment: colonist.assignment === null ? null : { ...colonist.assignment },
+      travel: colonist.travel === null ? null : { ...colonist.travel, routeNodeIds: [...colonist.travel.routeNodeIds] },
     })));
     this.maintenanceTasks.splice(0, this.maintenanceTasks.length, ...state.maintenanceTasks.map((task) => ({ ...task, workerIds: [...task.workerIds] })));
     this.snapshot = this.createSnapshot();
@@ -396,7 +394,7 @@ export class SimulationEngine {
       );
       this.emitMaintenanceTransitions(newMaintenanceRequests);
       this.reallocateWorkforce(false, true);
-      progressTravelTasks(this.colonists, stepMinutes);
+      this.emitWorkforceTransitions(progressTravelTasks(this.colonists, stepMinutes));
       updateFacilityWorkforce(this.facilities, this.colonists);
       const maintenanceTransitions = updateMaintenanceTasks(
         stepMinutes,

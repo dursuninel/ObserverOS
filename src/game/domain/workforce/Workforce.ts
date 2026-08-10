@@ -3,14 +3,17 @@ import type { Priority } from '../facilities/Facility';
 export type ColonistMainState = 'available' | 'working' | 'resting';
 export type WorkforceTaskType = 'maintenance' | 'operate';
 export type AssignmentPhase = 'on-site' | 'traveling';
+export type TravelPurpose = 'return-to-habitat' | 'to-assignment';
 
 export interface TravelTaskState {
   readonly durationMinutes: number;
   readonly elapsedMinutes: number;
   readonly id: string;
+  readonly purpose: TravelPurpose;
+  readonly routeNodeIds: readonly string[];
   readonly sourceLocationId: string;
   readonly startedAt: number;
-  readonly targetFacilityId: string;
+  readonly targetLocationId: string;
   readonly taskType: WorkforceTaskType;
 }
 
@@ -19,15 +22,16 @@ export interface ColonistAssignmentState {
   readonly id: string;
   readonly phase: AssignmentPhase;
   readonly taskType: WorkforceTaskType;
-  readonly travel: TravelTaskState | null;
 }
 
 export interface ColonistState {
   readonly assignment: ColonistAssignmentState | null;
   readonly id: string;
   readonly locationId: string;
+  readonly restDue: boolean;
   readonly restGroup: number;
   readonly state: ColonistMainState;
+  readonly travel: TravelTaskState | null;
 }
 
 export interface WorkforceRequest {
@@ -47,4 +51,6 @@ export interface WorkforceSummary {
   readonly available: number;
   readonly population: number;
   readonly resting: number;
+  readonly traveling: number;
+  readonly travelingToRest: number;
 }

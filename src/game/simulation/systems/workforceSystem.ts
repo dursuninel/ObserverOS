@@ -3,20 +3,23 @@ import type { MaintenanceTaskState } from '../../domain/maintenance/Maintenance'
 import type { ColonistAssignmentState, ColonistState, TravelTaskState, WorkforceRequest, WorkforceSummary, WorkforceTaskType } from '../../domain/workforce/Workforce';
 import type { SimulationConfig } from '../SimulationConfig';
 import type { MutableFacilityState } from './facilityCommands';
+import { resolveTravelDuration } from '../../domain/workforce/TravelNetwork';
 
-export interface MutableTravelTaskState extends Omit<TravelTaskState, 'elapsedMinutes'> {
+export interface MutableTravelTaskState extends Omit<TravelTaskState, 'elapsedMinutes' | 'routeNodeIds'> {
   elapsedMinutes: number;
+  routeNodeIds: readonly string[];
 }
 
-export interface MutableColonistAssignmentState extends Omit<ColonistAssignmentState, 'phase' | 'travel'> {
+export interface MutableColonistAssignmentState extends Omit<ColonistAssignmentState, 'phase'> {
   phase: ColonistAssignmentState['phase'];
-  travel: MutableTravelTaskState | null;
 }
 
-export interface MutableColonistState extends Omit<ColonistState, 'assignment' | 'locationId' | 'state'> {
+export interface MutableColonistState extends Omit<ColonistState, 'assignment' | 'locationId' | 'restDue' | 'state' | 'travel'> {
   assignment: MutableColonistAssignmentState | null;
   locationId: string;
+  restDue: boolean;
   state: ColonistState['state'];
+  travel: MutableTravelTaskState | null;
 }
 
 export interface WorkforceTransition {
@@ -31,8 +34,6 @@ const PRIORITY_RANK: Readonly<Record<Priority, number>> = Object.freeze({ critic
 function populationConfig(config: SimulationConfig) {
   return config.population ?? {
     count: 0,
-    maintenanceTravelMinutes: 0,
-    operationTravelMinutes: 0,
     restCycleMinutes: 1_440,
     restDurationMinutes: 0,
     restGroupCount: 1,
@@ -53,22 +54,60 @@ export function createColonists(config: SimulationConfig): MutableColonistState[
     const id = `colonist-${(index + 1).toString().padStart(3, '0')}`;
     const restGroup = index % population.restGroupCount;
     const resting = isColonistResting(restGroup, 0, config);
-    return { assignment: null, id, locationId: 'habitat', restGroup, state: resting ? 'resting' : 'available' };
+    return { assignment: null, id, locationId: 'habitat', restDue: resting, restGroup, state: resting ? 'resting' : 'available', travel: null };
   });
+}
+
+function createTravel(
+  colonist: MutableColonistState,
+  targetLocationId: string,
+  purpose: TravelTaskState['purpose'],
+  taskType: WorkforceTaskType,
+  elapsedMinutes: number,
+  config: SimulationConfig,
+): MutableTravelTaskState | null {
+  if (colonist.locationId === targetLocationId) return null;
+  if (config.travelNetwork === undefined) return null;
+  const resolved = resolveTravelDuration(config.travelNetwork, colonist.locationId, targetLocationId);
+  return {
+    durationMinutes: resolved.durationMinutes,
+    elapsedMinutes: 0,
+    id: `travel-${colonist.id}-${purpose}-${elapsedMinutes.toString().padStart(6, '0')}`,
+    purpose,
+    routeNodeIds: resolved.routeNodeIds,
+    sourceLocationId: colonist.locationId,
+    startedAt: elapsedMinutes,
+    targetLocationId,
+    taskType,
+  };
+}
+
+function beginReturnToHabitat(colonist: MutableColonistState, elapsedMinutes: number, config: SimulationConfig): WorkforceTransition[] {
+  if (colonist.travel !== null) return [];
+  const previous = colonist.assignment;
+  colonist.assignment = null;
+  if (colonist.locationId === 'habitat') {
+    colonist.state = 'resting';
+    return [{ colonistId: colonist.id, ...(previous === null ? {} : { previousFacilityId: previous.facilityId }), type: 'rest-started' }];
+  }
+  colonist.travel = createTravel(colonist, 'habitat', 'return-to-habitat', previous?.taskType ?? 'operate', elapsedMinutes, config);
+  colonist.state = 'working';
+  return previous === null ? [] : [{ colonistId: colonist.id, previousFacilityId: previous.facilityId, type: 'released' }];
 }
 
 export function updateRestStates(colonists: MutableColonistState[], elapsedMinutes: number, config: SimulationConfig): WorkforceTransition[] {
   const transitions: WorkforceTransition[] = [];
   for (const colonist of colonists) {
     const shouldRest = isColonistResting(colonist.restGroup, elapsedMinutes, config);
-    if (shouldRest && colonist.state !== 'resting') {
-      transitions.push({ colonistId: colonist.id, ...(colonist.assignment === null ? {} : { previousFacilityId: colonist.assignment.facilityId }), type: 'rest-started' });
-      colonist.assignment = null;
-      colonist.locationId = 'habitat';
-      colonist.state = 'resting';
-    } else if (!shouldRest && colonist.state === 'resting') {
-      colonist.state = 'available';
-      transitions.push({ colonistId: colonist.id, type: 'rest-ended' });
+    if (shouldRest) {
+      colonist.restDue = true;
+      if (colonist.state !== 'resting' && colonist.travel === null) transitions.push(...beginReturnToHabitat(colonist, elapsedMinutes, config));
+    } else if (colonist.restDue) {
+      colonist.restDue = false;
+      if (colonist.state === 'resting') {
+        colonist.state = 'available';
+        transitions.push({ colonistId: colonist.id, type: 'rest-ended' });
+      }
     }
   }
   return transitions;
@@ -152,17 +191,19 @@ function assignForTarget(
 
 export function allocateWorkforce(requests: readonly WorkforceRequest[], colonists: readonly MutableColonistState[]): ReadonlyMap<string, readonly string[]> {
   const ordered = [...requests].sort(compareWorkforceRequests);
-  const active = colonists.filter(({ state }) => state !== 'resting').sort((left, right) => left.id.localeCompare(right.id));
+  const active = colonists.filter(({ restDue, state, travel }) => !restDue && state !== 'resting' && travel?.purpose !== 'return-to-habitat').sort((left, right) => left.id.localeCompare(right.id));
   const availableIds = new Set(active.map(({ id }) => id));
   const selected = new Map<string, string[]>();
+  const requestIds = new Set(requests.map(({ id }) => id));
+  for (const colonist of active) {
+    if (colonist.travel?.purpose !== 'to-assignment' || colonist.assignment === null) continue;
+    availableIds.delete(colonist.id);
+    if (!requestIds.has(colonist.assignment.id)) continue;
+    selected.set(colonist.assignment.id, [...(selected.get(colonist.assignment.id) ?? []), colonist.id]);
+  }
   for (const request of ordered) assignForTarget(request, request.minimum, active, availableIds, selected, !request.canPartialAssign);
   for (const request of ordered) assignForTarget(request, request.desired, active, availableIds, selected, false);
   return selected;
-}
-
-function travelDuration(taskType: WorkforceTaskType, config: SimulationConfig): number {
-  const population = populationConfig(config);
-  return taskType === 'maintenance' ? population.maintenanceTravelMinutes : population.operationTravelMinutes;
 }
 
 export function applyWorkforceAllocation(
@@ -182,32 +223,26 @@ export function applyWorkforceAllocation(
     const next = assignmentByColonist.get(colonist.id);
     const previous = colonist.assignment;
     if (next === undefined) {
-      if (previous !== null) transitions.push({ colonistId: colonist.id, previousFacilityId: previous.facilityId, type: 'released' });
+      if (previous === null || colonist.travel?.purpose === 'to-assignment') continue;
       colonist.assignment = null;
-      colonist.state = 'available';
+      colonist.travel = instantOnSite ? null : createTravel(colonist, 'habitat', 'return-to-habitat', previous.taskType, elapsedMinutes, config);
+      colonist.state = colonist.travel === null ? 'available' : 'working';
+      transitions.push({ colonistId: colonist.id, previousFacilityId: previous.facilityId, type: 'released' });
       continue;
     }
     if (previous?.id === next.id) {
       colonist.state = 'working';
       continue;
     }
-    const durationMinutes = instantOnSite ? 0 : travelDuration(next.taskType, config);
-    const travel: MutableTravelTaskState | null = durationMinutes === 0 ? null : {
-      durationMinutes,
-      elapsedMinutes: 0,
-      id: `travel-${colonist.id}-${next.id}-${elapsedMinutes.toString().padStart(6, '0')}`,
-      sourceLocationId: colonist.locationId,
-      startedAt: elapsedMinutes,
-      targetFacilityId: next.targetEntityId,
-      taskType: next.taskType,
-    };
+    if (colonist.travel !== null) continue;
+    const travel = instantOnSite ? null : createTravel(colonist, next.targetEntityId, 'to-assignment', next.taskType, elapsedMinutes, config);
     colonist.assignment = {
       facilityId: next.targetEntityId,
       id: next.id,
       phase: travel === null ? 'on-site' : 'traveling',
       taskType: next.taskType,
-      travel,
     };
+    colonist.travel = travel;
     if (travel === null) colonist.locationId = next.targetEntityId;
     colonist.state = 'working';
     transitions.push({
@@ -220,20 +255,25 @@ export function applyWorkforceAllocation(
   return transitions;
 }
 
-export function progressTravelTasks(colonists: MutableColonistState[], stepMinutes: number): string[] {
-  const arrived: string[] = [];
+export function progressTravelTasks(colonists: MutableColonistState[], stepMinutes: number): WorkforceTransition[] {
+  const transitions: WorkforceTransition[] = [];
   for (const colonist of colonists) {
-    const assignment = colonist.assignment;
-    const travel = assignment?.travel;
-    if (assignment === null || assignment === undefined || travel === null || travel === undefined) continue;
+    const travel = colonist.travel;
+    if (travel === null) continue;
     travel.elapsedMinutes = Math.min(travel.durationMinutes, travel.elapsedMinutes + stepMinutes);
     if (travel.elapsedMinutes < travel.durationMinutes) continue;
-    assignment.phase = 'on-site';
-    assignment.travel = null;
-    colonist.locationId = assignment.facilityId;
-    arrived.push(colonist.id);
+    colonist.locationId = travel.targetLocationId;
+    colonist.travel = null;
+    if (travel.purpose === 'return-to-habitat') {
+      colonist.assignment = null;
+      colonist.state = colonist.restDue ? 'resting' : 'available';
+      if (colonist.restDue) transitions.push({ colonistId: colonist.id, type: 'rest-started' });
+    } else if (colonist.assignment !== null) {
+      colonist.assignment.phase = 'on-site';
+      colonist.state = 'working';
+    }
   }
-  return arrived;
+  return transitions;
 }
 
 export function updateFacilityWorkforce(facilities: ReadonlyMap<string, MutableFacilityState>, colonists: readonly MutableColonistState[]): void {
@@ -243,7 +283,7 @@ export function updateFacilityWorkforce(facilities: ReadonlyMap<string, MutableF
   }
   for (const colonist of colonists) {
     const assignment = colonist.assignment;
-    if (assignment === null || assignment.taskType !== 'operate') continue;
+    if (assignment === null || assignment.taskType !== 'operate' || colonist.restDue) continue;
     const facility = facilities.get(assignment.facilityId);
     if (facility === undefined) continue;
     facility.assignedWorkforce += 1;
@@ -253,15 +293,16 @@ export function updateFacilityWorkforce(facilities: ReadonlyMap<string, MutableF
 
 export function workforceSummary(colonists: readonly MutableColonistState[]): WorkforceSummary {
   const resting = colonists.filter(({ state }) => state === 'resting').length;
-  const assigned = colonists.filter(({ assignment, state }) => state !== 'resting' && assignment !== null).length;
-  const active = colonists.length - resting;
-  return Object.freeze({ active, assigned, available: active - assigned, population: colonists.length, resting });
+  const traveling = colonists.filter(({ travel }) => travel !== null).length;
+  const travelingToRest = colonists.filter(({ travel }) => travel?.purpose === 'return-to-habitat').length;
+  const activeColonists = colonists.filter(({ restDue, state }) => !restDue && state !== 'resting');
+  const assigned = activeColonists.filter(({ assignment }) => assignment !== null).length;
+  const available = activeColonists.filter(({ assignment, travel }) => assignment === null && travel === null).length;
+  return Object.freeze({ active: activeColonists.length, assigned, available, population: colonists.length, resting, traveling, travelingToRest });
 }
 
 export function toReadonlyColonist(colonist: MutableColonistState): ColonistState {
-  const assignment = colonist.assignment === null ? null : Object.freeze({
-    ...colonist.assignment,
-    travel: colonist.assignment.travel === null ? null : Object.freeze({ ...colonist.assignment.travel }),
-  });
-  return Object.freeze({ ...colonist, assignment });
+  const assignment = colonist.assignment === null ? null : Object.freeze({ ...colonist.assignment });
+  const travel = colonist.travel === null ? null : Object.freeze({ ...colonist.travel, routeNodeIds: Object.freeze([...colonist.travel.routeNodeIds]) });
+  return Object.freeze({ ...colonist, assignment, travel });
 }
