@@ -1,6 +1,7 @@
 import type { FacilityDefinition, Priority } from '../../domain/facilities/Facility';
 import { RESOURCE_IDS, type ResourceId, type ResourcePoolState, type ResourceQuantityState, type ResourceRates } from '../../domain/resources/Resource';
 import type { MutableFacilityState } from './facilityCommands';
+import { conditionPerformanceFactor } from './conditionSystem';
 
 export interface MutableResourceQuantityState {
   capacity: number;
@@ -20,6 +21,25 @@ function rate(rates: ResourceRates | undefined, resource: ResourceId): number {
 function activeMode(definition: FacilityDefinition, state: MutableFacilityState) {
   if (state.state !== 'online' || state.mode === null) return undefined;
   return definition.modes?.[state.mode];
+}
+
+export function workforcePerformanceFactor(definition: FacilityDefinition, state: MutableFacilityState): number {
+  const workforce = definition.workforce;
+  if (workforce === undefined) return 1;
+  if (state.effectiveWorkforce < workforce.minimum) return 0;
+  const target = state.mode === 'boost' ? workforce.boost ?? workforce.nominal : workforce.nominal;
+  if (target <= workforce.minimum || state.effectiveWorkforce >= target) return 1;
+  return 0.6 + (state.effectiveWorkforce - workforce.minimum) / (target - workforce.minimum) * 0.4;
+}
+
+function facilityPerformanceFactor(definition: FacilityDefinition, state: MutableFacilityState): number {
+  return workforcePerformanceFactor(definition, state) * conditionPerformanceFactor(state.condition);
+}
+
+function facilityRate(definition: FacilityDefinition, state: MutableFacilityState, resource: ResourceId, direction: 'consumption' | 'production'): number {
+  const mode = activeMode(definition, state);
+  const rates = direction === 'production' ? mode?.productionPerHour : mode?.consumptionPerHour;
+  return rate(rates, resource) * facilityPerformanceFactor(definition, state);
 }
 
 function availableCapacity(
@@ -54,7 +74,7 @@ export function updateResourceLedger(
   const onlineStates = [...states.values()].filter((state) => state.state === 'online');
   const energyProductionRate = onlineStates.reduce((total, state) => {
     const definition = definitionById.get(state.id);
-    return total + rate(definition === undefined ? undefined : activeMode(definition, state)?.productionPerHour, 'energy');
+    return total + (definition === undefined ? 0 : facilityRate(definition, state, 'energy', 'production'));
   }, 0);
   const baseEnergyNeed = rate(baseConsumptionPerHour, 'energy') * hours;
   const energyCapacity = availableCapacity('energy', definitions, states);
@@ -65,13 +85,13 @@ export function updateResourceLedger(
   const energyConsumers = onlineStates
     .map((state) => ({ definition: definitionById.get(state.id), state }))
     .filter((entry): entry is { definition: FacilityDefinition; state: MutableFacilityState } => entry.definition !== undefined)
-    .filter(({ definition, state }) => rate(activeMode(definition, state)?.consumptionPerHour, 'energy') > 0)
+    .filter(({ definition, state }) => facilityRate(definition, state, 'energy', 'consumption') > 0)
     .sort((left, right) => PRIORITY_RANK[right.state.energyPriority] - PRIORITY_RANK[left.state.energyPriority] || left.state.id.localeCompare(right.state.id));
 
   const supplied = new Set<string>();
   let allocatedFacilityEnergy = 0;
   for (const { definition, state } of energyConsumers) {
-    const needed = rate(activeMode(definition, state)?.consumptionPerHour, 'energy') * hours;
+    const needed = facilityRate(definition, state, 'energy', 'consumption') * hours;
     if (availableEnergy + Number.EPSILON < needed) continue;
     availableEnergy -= needed;
     allocatedFacilityEnergy += needed;
@@ -88,13 +108,12 @@ export function updateResourceLedger(
   for (const state of onlineStates) {
     const definition = definitionById.get(state.id);
     if (definition === undefined) continue;
-    const mode = activeMode(definition, state);
-    const needsEnergy = rate(mode?.consumptionPerHour, 'energy') > 0;
+    const needsEnergy = facilityRate(definition, state, 'energy', 'consumption') > 0;
     if (needsEnergy && !supplied.has(state.id)) continue;
-    productionRates.material += rate(mode?.productionPerHour, 'material');
-    productionRates.oxygen += rate(mode?.productionPerHour, 'oxygen');
-    consumptionRates.material += rate(mode?.consumptionPerHour, 'material');
-    consumptionRates.oxygen += rate(mode?.consumptionPerHour, 'oxygen');
+    productionRates.material += facilityRate(definition, state, 'material', 'production');
+    productionRates.oxygen += facilityRate(definition, state, 'oxygen', 'production');
+    consumptionRates.material += facilityRate(definition, state, 'material', 'consumption');
+    consumptionRates.oxygen += facilityRate(definition, state, 'oxygen', 'consumption');
   }
 
   for (const resource of RESOURCE_IDS) {

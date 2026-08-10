@@ -181,4 +181,16 @@ describe('module boundaries', () => {
 
     expect(findCycle(graph)).toBeUndefined();
   });
+
+  it('keeps workforce assignment authority out of the renderer', () => {
+    const rendererFiles = sourceFiles(resolve(sourceRoot, 'game/world'));
+    for (const file of rendererFiles) {
+      const imports = moduleSpecifiers(file);
+      const source = readFileSync(file, 'utf8');
+      expect(imports.some((specifier) => specifier.includes('/simulation/systems/')), `${relative(sourceRoot, file)} imports simulation systems`).toBe(false);
+      for (const authorityCall of ['allocateWorkforce(', 'applyWorkforceAllocation(', 'submitFacilityCommand(', 'advanceFixedSteps(']) {
+        expect(source.includes(authorityCall), `${relative(sourceRoot, file)} calls ${authorityCall}`).toBe(false);
+      }
+    }
+  });
 });

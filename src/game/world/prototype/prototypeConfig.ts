@@ -4,11 +4,8 @@ export const EMPTY_METRICS: WorldMetrics = { drawCalls: 0, fps: 0, frameTimeMs: 
 
 export const DEFAULT_PROTOTYPE_STATE: PrototypeDebugState = {
   cameraPreset: 'overview',
-  colonistCount: 15,
   fogEnabled: true,
-  mineState: 'working',
   quality: 'high',
-  reactorState: 'normal',
   safeAreasVisible: false,
   snowEnabled: true,
   timeOfDay: 0.74,

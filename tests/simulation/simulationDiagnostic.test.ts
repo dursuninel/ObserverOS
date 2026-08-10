@@ -17,6 +17,7 @@ describe('Phase 2 simulation diagnostic model', () => {
       x1RealSecondsPerSimulationMinute: 25 / 60,
     });
     expect(view.mine).toMatchObject({ energyPriority: 'normal', id: 'mine-01', mode: 'normal', state: 'online' });
+    expect(view.workforce).toEqual({ population: 11, active: 8, assigned: 8, available: 0, resting: 3 });
     expect(view.resources.find(({ id }) => id === 'material')?.productionRate).toBe(12);
     expect(view.resources.find(({ id }) => id === 'material')?.stored).toBeCloseTo(12);
   });

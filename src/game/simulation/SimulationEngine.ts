@@ -1,14 +1,44 @@
-import type { FacilityCommandRequest, FacilityCommandResult, FacilityDefinition, SafetyInterlock } from '../domain/facilities/Facility';
-import { PHASE_TWO_BASELINE_CONFIG, type SimulationConfig } from './SimulationConfig';
-import { SimulationClock, type SimulationSpeed } from './SimulationClock';
+import type { FacilityCommandRequest, FacilityCommandResult, FacilityDefinition, FacilityInstanceState, SafetyInterlock } from '../domain/facilities/Facility';
+import type { MaintenanceTaskState } from '../domain/maintenance/Maintenance';
+import type { ColonistState } from '../domain/workforce/Workforce';
+import { PHASE_THREE_BASELINE_CONFIG, type SimulationConfig } from './SimulationConfig';
+import { SimulationClock, type SimulationClockState, type SimulationSpeed } from './SimulationClock';
 import type { SimulationEvent } from './SimulationEvent';
 import type { SimulationSnapshot } from './SimulationSnapshot';
+import { type ConditionTransition, applyFacilityWear } from './systems/conditionSystem';
 import { applyFacilityCommand, createFacilityState, defaultSafetyInterlock, toReadonlyFacilityState, type MutableFacilityState } from './systems/facilityCommands';
+import { compareMaintenanceTasks, refreshMaintenanceRequests, toReadonlyMaintenanceTask, updateMaintenanceTasks, type MaintenanceTransition, type MutableMaintenanceTaskState } from './systems/maintenanceSystem';
 import { createResourcePool, toReadonlyResourcePool, updateResourceLedger, type MutableResourcePoolState } from './systems/resourceLedger';
+import {
+  allocateWorkforce,
+  applyWorkforceAllocation,
+  createColonists,
+  createWorkforceRequests,
+  progressTravelTasks,
+  toReadonlyColonist,
+  updateFacilityWorkforce,
+  updateRestStates,
+  workforceSummary,
+  type MutableColonistState,
+  type WorkforceTransition,
+} from './systems/workforceSystem';
 
 export interface SimulationEngineOptions {
   readonly config?: SimulationConfig;
   readonly safetyInterlock?: SafetyInterlock;
+}
+
+interface SerializedSimulationState {
+  readonly activeShortageIds: readonly string[];
+  readonly clock: SimulationClockState;
+  readonly colonists: readonly ColonistState[];
+  readonly events: readonly SimulationEvent[];
+  readonly eventSequence: number;
+  readonly facilities: readonly FacilityInstanceState[];
+  readonly maintenanceTasks: readonly MaintenanceTaskState[];
+  readonly processedCommandIds: readonly string[];
+  readonly resources: SimulationSnapshot['resources'];
+  readonly revision: number;
 }
 
 type SnapshotListener = () => void;
@@ -17,11 +47,23 @@ function validateConfig(config: SimulationConfig): void {
   if (!Number.isInteger(config.daylightDurationMinutes) || config.daylightDurationMinutes < 0 || config.daylightDurationMinutes > config.clock.localDayMinutes) {
     throw new Error('daylightDurationMinutes must be an integer within the local day.');
   }
+  if (config.maintenanceThreshold !== undefined && (config.maintenanceThreshold <= 0 || config.maintenanceThreshold > 100)) {
+    throw new Error('maintenanceThreshold must be within 1..100.');
+  }
+  if (config.population !== undefined) {
+    const population = config.population;
+    if (!Number.isInteger(population.count) || population.count < 0) throw new Error('Population count must be a non-negative integer.');
+    if (!Number.isInteger(population.restGroupCount) || population.restGroupCount <= 0) throw new Error('restGroupCount must be a positive integer.');
+    if (population.restDurationMinutes < 0 || population.restDurationMinutes >= population.restCycleMinutes) throw new Error('Rest duration must be shorter than its cycle.');
+  }
   const ids = new Set<string>();
   for (const definition of config.facilities) {
     if (ids.has(definition.id)) throw new Error(`Duplicate facility id: ${definition.id}`);
     ids.add(definition.id);
     if (definition.initialCondition < 0 || definition.initialCondition > 100) throw new Error(`Facility ${definition.id} condition must be between 0 and 100.`);
+    if (definition.workforce !== undefined && (definition.workforce.minimum <= 0 || definition.workforce.nominal < definition.workforce.minimum)) {
+      throw new Error(`Facility ${definition.id} workforce requirements are invalid.`);
+    }
   }
 }
 
@@ -36,12 +78,15 @@ function frozenEvent(event: SimulationEvent): SimulationEvent {
 /** Authoritative, deterministic and presentation-independent simulation core. */
 export class SimulationEngine {
   readonly authority = 'simulation' as const;
+  private readonly activeShortageIds = new Set<string>();
   private readonly clock: SimulationClock;
+  private readonly colonists: MutableColonistState[];
   private readonly config: SimulationConfig;
   private readonly definitions: ReadonlyMap<string, FacilityDefinition>;
   private readonly events: SimulationEvent[] = [];
   private readonly facilities = new Map<string, MutableFacilityState>();
   private readonly listeners = new Set<SnapshotListener>();
+  private readonly maintenanceTasks: MutableMaintenanceTaskState[] = [];
   private readonly processedCommandIds = new Set<string>();
   private readonly resources: MutableResourcePoolState;
   private readonly safetyInterlock: SafetyInterlock;
@@ -50,15 +95,24 @@ export class SimulationEngine {
   private snapshot: SimulationSnapshot;
 
   constructor(options: SimulationEngineOptions = {}) {
-    this.config = options.config ?? PHASE_TWO_BASELINE_CONFIG;
+    this.config = options.config ?? PHASE_THREE_BASELINE_CONFIG;
     validateConfig(this.config);
     this.clock = new SimulationClock(this.config.clock, this.config.initialSpeed);
     this.safetyInterlock = options.safetyInterlock ?? defaultSafetyInterlock;
     this.definitions = new Map(this.config.facilities.map((definition) => [definition.id, definition]));
     for (const definition of this.config.facilities) this.facilities.set(definition.id, createFacilityState(definition));
     this.resources = createResourcePool(this.config.initialResources);
+    this.colonists = createColonists(this.config);
+    this.reallocateWorkforce(true, false);
+    applyFacilityWear(0, this.config.facilities, this.facilities, this.config);
     updateResourceLedger(0, this.config.baseConsumptionPerHour, this.config.facilities, this.facilities, this.resources);
     this.snapshot = this.createSnapshot();
+  }
+
+  static fromSerializedState(serialized: string, options: SimulationEngineOptions = {}): SimulationEngine {
+    const engine = new SimulationEngine(options);
+    engine.restoreAuthoritativeState(JSON.parse(serialized) as SerializedSimulationState);
+    return engine;
   }
 
   advanceWallTime(wallMilliseconds: number): number {
@@ -83,14 +137,7 @@ export class SimulationEngine {
   }
 
   serializeAuthoritativeState(): string {
-    return JSON.stringify({
-      clock: this.clock.exportState(),
-      eventSequence: this.eventSequence,
-      facilities: this.snapshot.facilities,
-      processedCommandIds: [...this.processedCommandIds].sort(),
-      resources: this.snapshot.resources,
-      revision: this.revision,
-    });
+    return JSON.stringify(this.exportAuthoritativeState());
   }
 
   setSpeed(speed: SimulationSpeed): void {
@@ -111,6 +158,8 @@ export class SimulationEngine {
     let result: FacilityCommandResult;
     const facility = this.facilities.get(request.facilityId);
     const definition = this.definitions.get(request.facilityId);
+    const previousBand = facility?.conditionBand;
+    const previousState = facility?.state;
     if (this.processedCommandIds.has(request.id)) {
       result = { reasonCode: 'command.duplicate-id', requestId: request.id, status: 'failed' };
     } else if (request.simTime !== this.clock.getElapsedMinutes()) {
@@ -137,6 +186,31 @@ export class SimulationEngine {
       sourceEntityId: request.id,
       targetEntityId: request.facilityId,
     });
+    if (facility !== undefined && result.status === 'applied') {
+      if (request.actuator === 'set-maintenance-priority') {
+        for (const task of this.maintenanceTasks) if (task.facilityId === facility.id && task.status !== 'completed') task.priority = facility.maintenancePriority;
+      }
+      if (previousBand !== undefined && previousBand !== facility.conditionBand) this.emitConditionTransition({ currentBand: facility.conditionBand, facilityId: facility.id, previousBand });
+      if (previousState !== 'failed' && facility.state === 'failed') this.emitFacilityFailed(facility.id);
+      this.emitMaintenanceTransitions(refreshMaintenanceRequests(
+        this.config.facilities,
+        this.facilities,
+        this.maintenanceTasks,
+        this.clock.getElapsedMinutes(),
+        this.config.maintenanceThreshold ?? 60,
+      ));
+      this.reallocateWorkforce(false, true);
+      this.emitMaintenanceTransitions(updateMaintenanceTasks(
+        0,
+        this.clock.getElapsedMinutes(),
+        this.definitions,
+        this.facilities,
+        this.colonists,
+        this.resources,
+        this.maintenanceTasks,
+      ));
+      updateFacilityWorkforce(this.facilities, this.colonists);
+    }
     this.publish();
     return Object.freeze({ ...result });
   }
@@ -163,11 +237,25 @@ export class SimulationEngine {
         paused: this.clock.getSpeed() === 0,
         speed: this.clock.getSpeed(),
       }),
+      colonists: Object.freeze([...this.colonists].sort((left, right) => left.id.localeCompare(right.id)).map(toReadonlyColonist)),
       eventCount: this.events.length,
       facilities: Object.freeze([...this.facilities.values()].sort((left, right) => left.id.localeCompare(right.id)).map(toReadonlyFacilityState)),
+      maintenanceTasks: Object.freeze([...this.maintenanceTasks].sort(compareMaintenanceTasks).map(toReadonlyMaintenanceTask)),
       resources: toReadonlyResourcePool(this.resources),
       revision: this.revision,
       time,
+      workforce: workforceSummary(this.colonists),
+    });
+  }
+
+  private emitConditionTransition(transition: ConditionTransition): void {
+    this.emitEvent({
+      category: 'system',
+      eventType: 'facility.condition-band-changed',
+      facilityId: transition.facilityId,
+      payload: { currentBand: transition.currentBand, previousBand: transition.previousBand },
+      severity: transition.currentBand === 'failed' ? 'critical' : transition.currentBand === 'critical' ? 'warning' : 'info',
+      sourceEntityId: transition.facilityId,
     });
   }
 
@@ -180,22 +268,164 @@ export class SimulationEngine {
     }));
   }
 
+  private emitFacilityFailed(facilityId: string): void {
+    this.emitEvent({ category: 'system', eventType: 'facility.failed', facilityId, severity: 'critical', sourceEntityId: facilityId });
+  }
+
+  private emitMaintenanceTransitions(transitions: readonly MaintenanceTransition[]): void {
+    for (const transition of transitions) {
+      const eventType = `maintenance.${transition.type}`;
+      this.emitEvent({
+        category: 'system',
+        eventType,
+        facilityId: transition.facilityId,
+        ...(transition.reasonCode === undefined ? {} : { reasonCode: transition.reasonCode }),
+        severity: transition.type === 'waiting' ? 'warning' : 'info',
+        sourceEntityId: transition.taskId,
+        targetEntityId: transition.facilityId,
+      });
+      if (transition.type === 'completed' && transition.recoveredFromFailure === true) {
+        this.emitEvent({ category: 'system', eventType: 'facility.recovered', facilityId: transition.facilityId, severity: 'info', sourceEntityId: transition.taskId, targetEntityId: transition.facilityId });
+      }
+    }
+  }
+
+  private emitWorkforceTransitions(transitions: readonly WorkforceTransition[]): void {
+    for (const transition of transitions) {
+      this.emitEvent({
+        category: 'system',
+        eventType: `workforce.${transition.type}`,
+        ...(transition.facilityId === undefined ? {} : { facilityId: transition.facilityId, targetEntityId: transition.facilityId }),
+        payload: {
+          colonistId: transition.colonistId,
+          ...(transition.previousFacilityId === undefined ? {} : { previousFacilityId: transition.previousFacilityId }),
+        },
+        severity: 'info',
+        sourceEntityId: transition.colonistId,
+      });
+    }
+  }
+
+  private exportAuthoritativeState(): SerializedSimulationState {
+    return {
+      activeShortageIds: [...this.activeShortageIds].sort(),
+      clock: this.clock.exportState(),
+      colonists: this.snapshot.colonists,
+      events: this.events,
+      eventSequence: this.eventSequence,
+      facilities: this.snapshot.facilities,
+      maintenanceTasks: this.snapshot.maintenanceTasks,
+      processedCommandIds: [...this.processedCommandIds].sort(),
+      resources: this.snapshot.resources,
+      revision: this.revision,
+    };
+  }
+
   private publish(): void {
     this.snapshot = this.createSnapshot();
     for (const listener of this.listeners) listener();
+  }
+
+  private reallocateWorkforce(instantOnSite: boolean, emitTransitions: boolean): void {
+    const requests = createWorkforceRequests(this.config.facilities, this.facilities, this.maintenanceTasks, this.resources.material.stored);
+    const allocation = allocateWorkforce(requests, this.colonists);
+    const transitions = applyWorkforceAllocation(requests, allocation, this.colonists, this.clock.getElapsedMinutes(), this.config, instantOnSite);
+    updateFacilityWorkforce(this.facilities, this.colonists);
+    if (emitTransitions) this.emitWorkforceTransitions(transitions);
+
+    const shortages = new Set(requests.filter((request) => (allocation.get(request.id)?.length ?? 0) < request.desired).map(({ id }) => id));
+    if (emitTransitions) {
+      for (const request of requests) {
+        if (!shortages.has(request.id) || this.activeShortageIds.has(request.id)) continue;
+        this.emitEvent({
+          category: 'system',
+          eventType: 'workforce.shortage',
+          facilityId: request.targetEntityId,
+          payload: { assigned: allocation.get(request.id)?.length ?? 0, desired: request.desired, requestId: request.id, taskType: request.taskType },
+          severity: request.priority === 'critical' ? 'critical' : 'warning',
+          sourceEntityId: request.id,
+          targetEntityId: request.targetEntityId,
+        });
+      }
+    }
+    this.activeShortageIds.clear();
+    for (const id of shortages) this.activeShortageIds.add(id);
+  }
+
+  private restoreAuthoritativeState(state: SerializedSimulationState): void {
+    this.clock.restoreState(state.clock);
+    this.eventSequence = state.eventSequence;
+    this.revision = state.revision;
+    this.events.splice(0, this.events.length, ...state.events.map(frozenEvent));
+    this.processedCommandIds.clear();
+    for (const id of state.processedCommandIds) this.processedCommandIds.add(id);
+    this.activeShortageIds.clear();
+    for (const id of state.activeShortageIds) this.activeShortageIds.add(id);
+    for (const facility of state.facilities) {
+      const target = this.facilities.get(facility.id);
+      if (target === undefined) throw new Error(`Serialized facility is missing from config: ${facility.id}`);
+      Object.assign(target, facility, { setpoints: { ...facility.setpoints } });
+    }
+    Object.assign(this.resources.energy, state.resources.energy);
+    Object.assign(this.resources.material, state.resources.material);
+    Object.assign(this.resources.oxygen, state.resources.oxygen);
+    this.colonists.splice(0, this.colonists.length, ...state.colonists.map((colonist) => ({
+      ...colonist,
+      assignment: colonist.assignment === null ? null : {
+        ...colonist.assignment,
+        travel: colonist.assignment.travel === null ? null : { ...colonist.assignment.travel },
+      },
+    })));
+    this.maintenanceTasks.splice(0, this.maintenanceTasks.length, ...state.maintenanceTasks.map((task) => ({ ...task, workerIds: [...task.workerIds] })));
+    this.snapshot = this.createSnapshot();
   }
 
   private runFixedSteps(stepCount: number): void {
     if (stepCount === 0) return;
     for (let index = 0; index < stepCount; index += 1) {
       this.clock.advanceFixedStep();
-      updateResourceLedger(
-        this.config.clock.fixedStepMinutes,
-        this.config.baseConsumptionPerHour,
+      const stepMinutes = this.config.clock.fixedStepMinutes;
+      const elapsedMinutes = this.clock.getElapsedMinutes();
+      this.emitWorkforceTransitions(updateRestStates(this.colonists, elapsedMinutes, this.config));
+      const newMaintenanceRequests = refreshMaintenanceRequests(
         this.config.facilities,
         this.facilities,
-        this.resources,
+        this.maintenanceTasks,
+        elapsedMinutes,
+        this.config.maintenanceThreshold ?? 60,
       );
+      this.emitMaintenanceTransitions(newMaintenanceRequests);
+      this.reallocateWorkforce(false, true);
+      progressTravelTasks(this.colonists, stepMinutes);
+      updateFacilityWorkforce(this.facilities, this.colonists);
+      const maintenanceTransitions = updateMaintenanceTasks(
+        stepMinutes,
+        elapsedMinutes,
+        this.definitions,
+        this.facilities,
+        this.colonists,
+        this.resources,
+        this.maintenanceTasks,
+      );
+      this.emitMaintenanceTransitions(maintenanceTransitions);
+      if (maintenanceTransitions.some(({ type }) => type === 'completed')) this.reallocateWorkforce(false, true);
+      updateResourceLedger(stepMinutes, this.config.baseConsumptionPerHour, this.config.facilities, this.facilities, this.resources);
+      const conditionTransitions = applyFacilityWear(stepMinutes, this.config.facilities, this.facilities, this.config);
+      for (const transition of conditionTransitions) {
+        this.emitConditionTransition(transition);
+        if (transition.currentBand === 'failed') this.emitFacilityFailed(transition.facilityId);
+      }
+      const postWearRequests = refreshMaintenanceRequests(
+        this.config.facilities,
+        this.facilities,
+        this.maintenanceTasks,
+        elapsedMinutes,
+        this.config.maintenanceThreshold ?? 60,
+      );
+      this.emitMaintenanceTransitions(postWearRequests);
+      if (conditionTransitions.length > 0 || postWearRequests.length > 0) {
+        this.reallocateWorkforce(false, true);
+      }
       this.revision += 1;
     }
     this.publish();

@@ -67,8 +67,16 @@ export class SimulationClock {
     return Object.freeze({ accumulatorUnits: this.accumulatorUnits, elapsedMinutes: this.elapsedMinutes, speed: this.speed });
   }
 
+  restoreState(state: SimulationClockState): void {
+    if (!Number.isInteger(state.accumulatorUnits) || state.accumulatorUnits < 0) throw new Error('Clock accumulatorUnits must be a non-negative integer.');
+    if (!Number.isInteger(state.elapsedMinutes) || state.elapsedMinutes < 0) throw new Error('Clock elapsedMinutes must be a non-negative integer.');
+    if (!SIMULATION_SPEEDS.includes(state.speed)) throw new Error('Clock speed is unsupported.');
+    this.accumulatorUnits = state.accumulatorUnits;
+    this.elapsedMinutes = state.elapsedMinutes;
+    this.speed = state.speed;
+  }
+
   private unitsPerStep(): number {
     return this.config.realSecondsPerSimulationHour * 1_000_000 * this.config.fixedStepMinutes;
   }
 }
-

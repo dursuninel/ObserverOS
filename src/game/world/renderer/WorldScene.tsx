@@ -1,10 +1,13 @@
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { BufferAttribute, MathUtils, Mesh, PointLight, Shape } from 'three';
 
 import { useSimulationSnapshot } from '../../../app/providers/simulationContext';
+import type { ColonistState } from '../../domain/workforce/Workforce';
+import type { SimulationSnapshot } from '../../simulation/SimulationSnapshot';
 import { requirePrototypeAsset } from '../assets/prototypeAssetRegistry';
-import { getColonistPose, getMaintenancePose, getPrototypeCharacterAssetId } from '../prototype/navigation';
+import { getAuthoritativeColonistPose } from '../prototype/authoritativeColonistPresentation';
+import { getPrototypeCharacterAssetId } from '../prototype/navigation';
 import { advanceSnowField, createSnowField } from '../prototype/environmentPresentation';
 import { getFacilityVisualSignature, getLampIntensity, isNight, QUALITY_PROFILES } from '../prototype/prototypeConfig';
 import { getFacilityPlacement, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT } from '../prototype/prototypeLayout';
@@ -68,9 +71,13 @@ function FacilityActivity({ color, height, intensity, speed }: { readonly color:
   );
 }
 
-function Facility({ debugState, id }: { readonly debugState: PrototypeDebugState; readonly id: FacilityId }) {
+function Facility({ debugState, id, simulationState }: { readonly debugState: PrototypeDebugState; readonly id: FacilityId; readonly simulationState: SimulationSnapshot['facilities'][number] | undefined }) {
   const placement = getFacilityPlacement(id);
-  const state = id === 'reactor' ? debugState.reactorState : id === 'mine' ? debugState.mineState : 'normal';
+  const state = id === 'reactor'
+    ? simulationState?.state === 'maintenance' ? 'maintenance' : simulationState?.state === 'failed' || simulationState?.state === 'interlocked' ? 'interlocked' : simulationState?.mode === 'boost' ? 'boost' : 'normal'
+    : id === 'mine'
+      ? simulationState?.state === 'maintenance' ? 'maintenance' : simulationState?.state === 'offline' || simulationState?.state === 'failed' ? 'offline' : 'working'
+      : 'normal';
   const signature = getFacilityVisualSignature(id, state, debugState.timeOfDay);
   const groupProps = { position: [placement.position[0], 0.18, placement.position[1]] as const, rotation: [0, placement.rotationY, 0] as const };
   if (id === 'reactor') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('reactor-body')} /><RuntimeAsset asset={requirePrototypeAsset('reactor-tower')} /><FacilityActivity {...signature} height={3.75} /></group>;
@@ -125,44 +132,24 @@ function LocalFrozenHaze() {
   return <group ref={mist}>{PROTOTYPE_LAYOUT.hazeAnchors.map(([x, z], index) => <mesh key={index} position={[x, 0.12 + index % 2 * 0.03, z]} rotation-x={-Math.PI / 2} scale={[1.8 + index % 3 * 0.35, 1.1, 1]}><circleGeometry args={[2.4, 14]} /><meshBasicMaterial color="#d4e2e5" depthWrite={false} opacity={0.035} transparent /></mesh>)}</group>;
 }
 
-function Colonist({ index }: { readonly index: number }) {
+function Colonist({ colonist }: { readonly colonist: ColonistState }) {
   const group = useRef<import('three').Group>(null);
   const presentationClock = usePresentationClock();
-  const initialPose = useMemo(() => getColonistPose(index, presentationClock.getElapsedSeconds()), [index, presentationClock]);
-  const [animation, setAnimation] = useState(() => initialPose.animation);
+  const pose = getAuthoritativeColonistPose(colonist);
+  const index = Number.parseInt(colonist.id.split('-').at(-1) ?? '1', 10) - 1;
   useFrame(() => {
     const deltaSeconds = presentationClock.getDeltaSeconds();
     if (deltaSeconds === 0) return;
-    const pose = getColonistPose(index, presentationClock.getElapsedSeconds());
-    setAnimation((current) => current === pose.animation ? current : pose.animation);
     if (!group.current) return;
     group.current.visible = pose.visible;
-    group.current.position.set(...pose.position);
+    const positionAlpha = 1 - Math.pow(0.78, deltaSeconds * 60);
+    group.current.position.x = MathUtils.lerp(group.current.position.x, pose.position[0], positionAlpha);
+    group.current.position.y = MathUtils.lerp(group.current.position.y, pose.position[1], positionAlpha);
+    group.current.position.z = MathUtils.lerp(group.current.position.z, pose.position[2], positionAlpha);
     const rotationAlpha = 1 - Math.pow(0.86, deltaSeconds * 60);
     group.current.rotation.y = MathUtils.lerp(group.current.rotation.y, pose.rotationY, rotationAlpha);
   });
-  return <group ref={group} position={initialPose.position} rotation-y={initialPose.rotationY} scale={0.92} visible={initialPose.visible}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={animation} /></group>;
-}
-
-function MaintenanceWorker({ facility }: { readonly facility: 'mine' | 'reactor' }) {
-  const group = useRef<import('three').Group>(null);
-  const presentationClock = usePresentationClock();
-  const [startTime] = useState(() => presentationClock.getElapsedSeconds());
-  const initialPose = useMemo(() => getMaintenancePose(facility, 0), [facility]);
-  const [animation, setAnimation] = useState<'Idle' | 'Walk'>('Idle');
-  const [activity, setActivity] = useState(false);
-  useFrame(() => {
-    const deltaSeconds = presentationClock.getDeltaSeconds();
-    if (deltaSeconds === 0) return;
-    const pose = getMaintenancePose(facility, presentationClock.getElapsedSeconds() - startTime);
-    setAnimation((current) => current === pose.animation ? current : pose.animation);
-    setActivity((current) => current === pose.activity ? current : pose.activity);
-    if (!group.current) return;
-    group.current.position.set(...pose.position);
-    const rotationAlpha = 1 - Math.pow(0.86, deltaSeconds * 60);
-    group.current.rotation.y = MathUtils.lerp(group.current.rotation.y, pose.rotationY, rotationAlpha);
-  });
-  return <group ref={group} position={initialPose.position} rotation-y={initialPose.rotationY} scale={0.92}><RuntimeAsset animation={animation} asset={requirePrototypeAsset(facility === 'reactor' ? 'prototype-astronaut-rae' : 'prototype-astronaut-barbara')} />{activity && <MaintenanceActivity />}</group>;
+  return <group ref={group} position={pose.position} rotation-y={pose.rotationY} scale={0.92} visible={pose.visible}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={pose.animation} />{pose.activity && <MaintenanceActivity />}</group>;
 }
 
 function MaintenanceActivity() {
@@ -195,7 +182,7 @@ function Ground() {
   );
 }
 
-function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics }: WorldSceneProps) {
+function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics, simulationSnapshot }: WorldSceneProps & { readonly simulationSnapshot: SimulationSnapshot }) {
   const quality = QUALITY_PROFILES[debugState.quality];
   const night = isNight(debugState.timeOfDay);
   const skyColor = night ? '#07101b' : '#9fb8c0';
@@ -210,16 +197,17 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics 
       {debugState.fogEnabled && <LocalFrozenHaze />}
       <Suspense fallback={null}>
         {roadTiles.map(({ position: [x, z], rotationY }) => <RuntimeAsset key={`${x}:${z}`} asset={requirePrototypeAsset('road-tile')} position={[x, 0.02, z]} rotationY={rotationY} scaleMultiplier={0.36} />)}
-        {(['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen'] as const).map((id) => <Facility key={id} debugState={debugState} id={id} />)}
+        {(['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen'] as const).map((id) => {
+          const instanceId = id === 'reactor' ? 'reactor-01' : id === 'mine' ? 'mine-01' : id === 'oxygen' ? 'oxygen-processor-01' : id === 'battery' ? 'battery-01' : undefined;
+          return <Facility key={id} debugState={debugState} id={id} simulationState={simulationSnapshot.facilities.find(({ id: facilityId }) => facilityId === instanceId)} />;
+        })}
         {(() => { const placement = getFacilityPlacement('expansion'); return <group position={[placement.position[0], 0.1, placement.position[1]]} rotation-y={placement.rotationY}><RuntimeAsset asset={requirePrototypeAsset('expansion-pad')} /></group>; })()}
         {PROTOTYPE_LAYOUT.zones.outerRocks.map(([x, z, rotation, scale], index) => <RuntimeAsset key={`outer-${index}`} asset={requirePrototypeAsset('rock-large')} position={[x, 0.12, z]} rotationY={rotation} scaleMultiplier={scale} />)}
         {PROTOTYPE_LAYOUT.zones.transitionRocks.map(([x, z, rotation], index) => <RuntimeAsset key={`transition-${index}`} asset={requirePrototypeAsset(index % 2 ? 'rock-small-a' : 'rock-small-b')} position={[x, 0.12, z]} rotationY={rotation} />)}
         {PROTOTYPE_LAYOUT.zones.coreCrates.map(([x, z, rotation], index) => <RuntimeAsset key={`crate-${index}`} asset={requirePrototypeAsset('supply-crate')} position={[x, 0.14, z]} rotationY={rotation} />)}
         {roadTiles.filter((_, index) => index % 3 === 0).map(({ position: [x, z] }, index) => <RuntimeAsset key={`floor-${index}`} asset={requirePrototypeAsset('floor-light')} position={[x, 0.16, z]} />)}
         <StreetLights debugState={debugState} />
-        {Array.from({ length: debugState.colonistCount }, (_, index) => <Colonist key={index} index={index} />)}
-        {debugState.reactorState === 'maintenance' && <MaintenanceWorker facility="reactor" />}
-        {debugState.mineState === 'maintenance' && <MaintenanceWorker facility="mine" />}
+        {simulationSnapshot.colonists.map((colonist) => <Colonist colonist={colonist} key={colonist.id} />)}
       </Suspense>
       {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
       <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />
@@ -236,7 +224,7 @@ export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, onMet
       <PresentationTimeProvider speed={simulationSnapshot.clock.speed}>
         <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
           <PresentationTimeDriver />
-          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={onMetrics} />
+          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={onMetrics} simulationSnapshot={simulationSnapshot} />
         </Canvas>
       </PresentationTimeProvider>
     </div>
