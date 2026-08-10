@@ -9,6 +9,7 @@ import {
   getCameraPanLimits,
   getCameraPresetTarget,
   getCameraZoomRange,
+  getLayoutOverviewZoom,
   mapScreenDragToPanScalars,
   mapScreenDragToWorldPan,
   panScalarsToWorldOffset,
@@ -81,5 +82,12 @@ describe('prototype camera math', () => {
     expect(clampCameraZoom(1, desktop)).toBe(desktop.min);
     expect(clampCameraZoom(999, desktop)).toBe(desktop.max);
     expect(desktop.min).toBeGreaterThan(mobile.min);
+  });
+
+  it('derives overview zoom from candidate bounds and panel-safe viewport', () => {
+    const compact = { center: [0, 0] as const, minX: -10, maxX: 10, minZ: -7, maxZ: 7 };
+    const wide = { center: [0, 0] as const, minX: -22, maxX: 22, minZ: -14, maxZ: 14 };
+    expect(getLayoutOverviewZoom(1280, 608, false, wide)).toBeLessThan(getLayoutOverviewZoom(1280, 608, false, compact));
+    expect(getLayoutOverviewZoom(1280, 608, true, wide)).toBeLessThanOrEqual(getLayoutOverviewZoom(1280, 608, false, wide));
   });
 });

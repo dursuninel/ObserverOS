@@ -710,7 +710,7 @@ FAZ 3 TEST 5 KULLANICI İNCELEMESİ İÇİN HAZIR
 
 ## Faz 4 — Test 1 / Deterministic Layout Generator + Visual Candidate Review
 
-**Durum:** KULLANICI GÖRSEL ADAY SEÇİMİNE HAZIR — NİHAİ LAYOUT DONDURULMADI
+**Durum:** KULLANICI GÖRSEL İNCELEMESİNDEN GEÇMEDİ — NİHAİ LAYOUT DONDURULMADI
 **Tarih:** 10 Ağustos 2026
 **Branch:** `phase-4-deterministic-layout`
 
@@ -822,3 +822,96 @@ FAZ 3 TEST 5 KULLANICI İNCELEMESİ İÇİN HAZIR
 - Yeni dependency eklenmedi. Faz 5'e geçilmedi.
 
 FAZ 4 TEST 1 — GÖRSEL ADAY SEÇİMİ İÇİN HAZIR
+
+### Kullanıcı görsel sonucu
+
+- Test 1 kullanıcı görsel incelemesinden geçmedi. A–E adayları aynı `STYLE_BASE_POSITIONS` koordinat şablonunun küçük global/per-facility jitter varyasyonlarıydı; yol düğümleri de X sırası ve ortak `z = 0` omurgası nedeniyle aynı temel yapıyı koruyordu.
+- Bu kayıt tarihsel Test 1 çıktısını korur; Faz 4 Test 2 yapısal üretim çalışması aşağıdaki yeni kayıtla devam eder.
+
+---
+
+## Faz 4 — Test 2 / Structural Layout Generation
+
+**Durum:** KULLANICI GÖRSEL ADAY SEÇİMİNE HAZIR — NİHAİ LAYOUT DONDURULMADI
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-4-deterministic-layout`
+
+### 1. TEST 1 NEDEN AYNI ADAYLAR ÜRETTİ?
+
+- Test 1 üreticisi `STYLE_BASE_POSITIONS + small global offset + per-facility jitter` kullanıyordu. Road generator entrance'ları X'e göre sıralıyor, spine düğümlerini ortak `z = 0` hattına yerleştiriyordu. Bu yüzden candidate score değişse de colony footprint, yol graphı, Habitat silueti, expansion ilişkisi ve plato aynı kalıyordu.
+
+### 2. FIXED BASE POSITION MİGRASYONU
+
+- `STYLE_BASE_POSITIONS` ve `createCandidatePositions` production generation kaynağından tamamen kaldırıldı. Sabit facility coordinate template kalmadı; generator artık zone, graph arketipi, anchor örnekleme, compound footprint ve hard constraintlerden çözüm üretir.
+
+### 3. STRUCTURAL ARCHETYPES
+
+- Beş declarative design graphı eklendi: Central Spine, L-Shaped, T-Junction, Offset Hub ve Split Core. Her arketip kendi main connection graphını, kontrollü cornerlarını, expansion ilişkisini, Habitat/terrain varyant havuzunu ve omurga yönünü taşır.
+
+### 4. FACILITY ANCHOR GENERATION
+
+- Her operational zone için 5×4 olmak üzere 20 deterministic potential anchor üretilir. Graph attachment çevresindeki sekiz yapısal anchor ile birlikte buildable containment, semantic zone, hazard, rotated visual AABB, separation ve ana yol açıklığına göre seçilir.
+
+### 5. HABITAT VISUAL COMPOUNDS
+
+- Gerçek kayıtlı assetlerle 5 Habitat visual compound tanımlandı: Compact Pod, Courtyard, Linear Compound, Clustered Habitat ve Service Yard. Bunlar farklı footprint ve 1–5 secondary visual module taşır; gameplay Habitat instance'ı daima tektir.
+
+### 6. DİĞER VISUAL COMPOUNDS
+
+- Solar için 3, Reactor/Battery/Mine/Oxygen için ikişer kontrollü visual composition tanımlandı. Bütün module asset ID'leri mevcut runtime AssetRegistry'den gelir; yeni gameplay facility/state/üretim eklenmedi.
+
+### 7. ROAD TOPOLOGY GENERATION
+
+- Yol graphı facility X sırasından değil structural archetype `mainConnections` sözleşmesinden üretilir. Görünür road ve authoritative navigation aynı edge/path kaynağını tüketir. Servis A* yolları diğer compound footprintlerini blocked area olarak görür; final hard validation road–compound kesişimini reject eder.
+
+### 8. TERRAIN VARIATION
+
+- Dört deterministic plato silueti eklendi: elongated, wide central shelf, offset industrial shelf ve split ledge. Gameplay hazard/resource/operational zone semantikleri korunur; camera bounds candidate geometry'den, overview zoom projected bounds ve safe viewport'tan türetilir.
+
+### 9. STREET LIGHT VARIATION
+
+- Işıklar arketip road graphının junction, corner, intermediate segment ve key approach noktalarından türetilir. A–E ışık pozisyon setleri birbirinden farklıdır.
+
+### 10. EXPANSION VARIATION
+
+- Doğu yol ucu, batı yol ucu, kuzey yan kolu ve güney dış rafı ilişkileri semantic preferred expansion alanlarında üretilir. Expansion compoundlardan açıklıkla ayrılır ve generated road/navigation erişimine sahiptir.
+
+### 11. STRUCTURAL SIGNATURE
+
+- Her candidate; arketip, Habitat varyantı, terrain varyantı, expansion ilişkisi, omurga yönü ve road turning pattern üzerinden deterministic signature taşır.
+
+### 12. DIVERSITY FILTER
+
+- Valid adaylar önce score edilir, sonra arketip başına en iyi temsilci seçilir ve normalize structural difference `0.32` threshold'u altında kalan benzer adaylar top listeden çıkarılır. Referans A–E minimum seçili farkı `0.835` oldu.
+
+### 13. SEED DIVERSITY
+
+- 100 seed sweep: 100 valid, 0 failed. Her seed için minimum 3 farklı structural signature ve minimum 3 arketip doğrulandı. Normal `generateLayoutCandidates` referans seed için 5 farklı arketip döndürür.
+
+### 14. SIMULATION FACILITY COUNT INVARIANT
+
+- Her candidate tam 6 canonical gameplay facility taşır. Visual modules yalnız renderer composition verisidir; Simulation config/snapshot 6 facility görmeye devam eder ve layout generation authoritative workforce/maintenance serialization'ını değiştirmez.
+
+### 15. TEST RESULTS
+
+- `npm run lint`: PASS — 0 hata, 0 uyarı.
+- `npm run typecheck`: PASS.
+- `npm test`: PASS — 26 dosya, 249 test.
+- Structural layout suite: PASS — istenen 27/27 yeni test.
+- Layout suites: PASS — 72/72 test.
+- Workforce/Maintenance: PASS — 26/26 test; authoritative determinism regression PASS.
+- `npm run build`: PASS — 380 module; yalnız mevcut 500 kB chunk-size uyarısı sürüyor.
+- Browser actual A–E switch/render: PASS. İlk denetimde yakalanan R3F `data-visual-variant` update crash'i `userData.visualVariantId` ile giderildi; düzeltme sonrasında A–E geçişlerinde yeni console error oluşmadı.
+- Yeni dependency eklenmedi.
+
+### 16. TOP 5 CANDIDATES
+
+- ADAY A — Merkezi omurga; Kompakt yaşam podu; 6 gameplay facility; 13 görsel modül; yatay/0 dönüş; 2 kavşak; doğu yol ucu; score `70.54`; structural difference `1.000`.
+- ADAY B — T kavşaklı koloni; Kümeli Habitat; 6 gameplay facility; 19 görsel modül; kırıklı/2 dönüş; 3 kavşak; kuzey yan kolu; score `69.02`; structural difference `1.000`.
+- ADAY C — L biçimli koloni; Avlulu yerleşke; 6 gameplay facility; 18 görsel modül; kırıklı/3 dönüş; 1 kavşak; güney dış rafı; score `66.01`; structural difference `0.962`.
+- ADAY D — İki çekirdekli koloni; Doğrusal yerleşke; 6 gameplay facility; 18 görsel modül; kırıklı/1 dönüş; 2 kavşak; güney dış rafı; score `63.21`; structural difference `0.835`.
+- ADAY E — Ofset merkez; Kümeli Habitat; 6 gameplay facility; 18 görsel modül; çapraz/2 dönüş; 3 kavşak; batı yol ucu; score `61.54`; structural difference `0.845`.
+- Actual UI'sız render karşılaştırmasında A–E yol ağı, colony footprint, Habitat compound, terrain silhouette ve Expansion relation üzerinden kolayca ayırt edildi. Bu teknik öz-denetimdir; nihai görsel acceptance ve aday seçimi kullanıcıya aittir.
+- Faz 5'e geçilmedi; NIVALIS layout freeze edilmedi.
+
+FAZ 4 TEST 2 — GÖRSEL ADAY SEÇİMİ İÇİN HAZIR

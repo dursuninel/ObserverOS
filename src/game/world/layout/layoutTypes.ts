@@ -2,6 +2,9 @@ import type { FacilityId } from '../prototype/types';
 
 export type Point2 = readonly [x: number, z: number];
 export type LayoutStyle = 'Compact' | 'Distributed' | 'Linear';
+export type StructuralArchetypeId = 'central-spine' | 'l-shaped' | 'offset-hub' | 'split-core' | 't-junction';
+export type HabitatVisualVariantId = 'clustered-habitat' | 'compact-pod' | 'courtyard' | 'linear-compound' | 'service-yard';
+export type TerrainVisualVariantId = 'elongated' | 'offset-industrial-shelf' | 'split-ledge' | 'wide-central-shelf';
 export type TerrainTag = 'blocked' | 'buildable' | 'hazardZone' | 'preferredExpansionArea' | 'resourceZone';
 export type OperationalZone = 'Emergency' | 'Energy' | 'Industrial' | 'LifeSupport' | 'Residential';
 export type LayoutEntityId = FacilityId | 'expansion';
@@ -53,7 +56,18 @@ export interface GeneratedFacilityPlacement {
   readonly primaryAssetId: string;
   readonly rotationY: number;
   readonly serviceClearance: number;
+  readonly visualFootprint: Rect2;
+  readonly visualModules: readonly GeneratedVisualModule[];
+  readonly visualVariantId: string;
   readonly workPoint: Point2;
+}
+
+export interface GeneratedVisualModule {
+  readonly assetId: string;
+  readonly localPosition: Point2;
+  readonly rotationY: number;
+  readonly scale: number;
+  readonly semanticVisualRole: 'annex' | 'connector' | 'panel' | 'plaza' | 'service-prop' | 'technical-module';
 }
 
 export interface GeneratedExpansionSlot {
@@ -131,6 +145,7 @@ export interface GeneratedPlanetLayout {
   readonly expansionSlots: readonly GeneratedExpansionSlot[];
   readonly facilities: readonly GeneratedFacilityPlacement[];
   readonly generatorVersion: string;
+  readonly plateauVertices: readonly Point2[];
   readonly navigationEdges: readonly NavigationEdge[];
   readonly navigationNodes: readonly NavigationNode[];
   readonly planetId: 'nivalis-3-prototype';
@@ -141,7 +156,22 @@ export interface GeneratedPlanetLayout {
   readonly seed: number;
   readonly streetLights: readonly StreetLightPlacement[];
   readonly style: LayoutStyle;
+  readonly structure: LayoutStructureSummary;
   readonly zones: readonly GeneratedZone[];
+}
+
+export interface LayoutStructureSummary {
+  readonly archetype: StructuralArchetypeId;
+  readonly clusterAssignments: Readonly<Record<FacilityId, 'core' | 'energy' | 'industrial' | 'life-support'>>;
+  readonly differenceScore: number;
+  readonly expansionRelation: 'east-road-end' | 'north-side-branch' | 'south-outer-shelf' | 'west-road-end';
+  readonly habitatVariant: HabitatVisualVariantId;
+  readonly junctionCount: number;
+  readonly mainSpineOrientation: 'diagonal' | 'horizontal' | 'mixed' | 'vertical';
+  readonly roadTurningPattern: readonly ('corner' | 'straight')[];
+  readonly signature: string;
+  readonly terrainVariant: TerrainVisualVariantId;
+  readonly visualModuleCount: number;
 }
 
 export interface LayoutFailure {

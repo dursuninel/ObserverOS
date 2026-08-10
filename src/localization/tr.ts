@@ -19,7 +19,13 @@ export const tr = {
   },
   layoutReview: {
     adjacency: 'YAKINLIK', candidate: 'ADAY {{letter}}', composition: 'KOMPOZİSYON', connected: 'Bağlı', expansion: 'GENİŞLEME', navigation: 'NAVİGASYON', newSeed: 'Yeni Tohum Üret', next: 'Sonraki Aday', notFrozen: 'DEV önizleme · nihai seçim değil', overlay: 'Yerleşim doğrulama katmanı', previous: 'Önceki Aday', productionPending: 'Nihai yerleşim kullanıcı seçimi sonrasında dondurulacaktır.', profile: 'PROFİL', readability: 'EKRAN OKUNABİLİRLİĞİ', road: 'YOL KALİTESİ', roadNetwork: 'YOL AĞI', seed: 'TOHUM', styles: { Compact: 'Kompakt', Distributed: 'Dağıtık', Linear: 'Doğrusal' }, terrain: 'ARAZİ KULLANIMI', title: 'YERLEŞİM ADAYLARI', total: 'TOPLAM PUAN', valid: 'GEÇERLİ', yes: 'Evet',
-    seedSweep: { averageCandidates: 'ORTALAMA ADAY', averageMs: 'ORTALAMA ÜRETİM SÜRESİ', failed: 'BAŞARISIZ', highest: 'EN YÜKSEK PUAN', lowest: 'EN DÜŞÜK PUAN', tested: 'TEST EDİLEN TOHUM', title: 'TOHUM TARAMASI', valid: 'GEÇERLİ' },
+    structure: 'YERLEŞİM YAPISI', habitatStructure: 'HABİTAT YAPISI', roadTopology: 'YOL TOPOLOJİSİ', roadTopologyValue: '{{orientation}} · {{turns}} dönüş', junction: 'KAVŞAK', gameplayFacilities: 'OYUN TESİSİ', visualModules: 'GÖRSEL MODÜL', expansionPosition: 'GENİŞLEME KONUMU', terrainSilhouette: 'ARAZİ SİLUETİ', structuralDifference: 'YAPISAL FARK', signature: 'ÇEŞİTLİLİK İMZASI',
+    archetypes: { 'central-spine': 'Merkezi omurga', 'l-shaped': 'L biçimli koloni', 't-junction': 'T kavşaklı koloni', 'offset-hub': 'Ofset merkez', 'split-core': 'İki çekirdekli koloni' },
+    habitatVariants: { 'compact-pod': 'Kompakt yaşam podu', courtyard: 'Avlulu yerleşke', 'linear-compound': 'Doğrusal yerleşke', 'clustered-habitat': 'Kümeli habitat', 'service-yard': 'Servis avlulu habitat' },
+    terrainVariants: { elongated: 'Uzun plato', 'wide-central-shelf': 'Geniş merkez rafı', 'offset-industrial-shelf': 'Ofset endüstri rafı', 'split-ledge': 'Bölünmüş çıkıntı' },
+    expansionRelations: { 'east-road-end': 'Doğu yol ucu', 'west-road-end': 'Batı yol ucu', 'north-side-branch': 'Kuzey yan kolu', 'south-outer-shelf': 'Güney dış rafı' },
+    orientations: { horizontal: 'Yatay omurga', vertical: 'Dikey omurga', diagonal: 'Çapraz omurga', mixed: 'Kırıklı omurga' },
+    seedSweep: { averageCandidates: 'ORTALAMA ADAY', averageMs: 'ORTALAMA ÜRETİM SÜRESİ', averageSignatures: 'ORTALAMA YAPISAL İMZA', minimumSignatures: 'EN AZ YAPISAL İMZA', failed: 'BAŞARISIZ', highest: 'EN YÜKSEK PUAN', lowest: 'EN DÜŞÜK PUAN', tested: 'TEST EDİLEN TOHUM', title: 'TOHUM TARAMASI', valid: 'GEÇERLİ' },
   },
   simulationDiagnostic: {
     actions: {

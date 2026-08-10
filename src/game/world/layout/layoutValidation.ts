@@ -1,7 +1,8 @@
 import { generatedPlanetLayoutSchema } from './generatedLayoutSchema';
-import { pointInRect, projectedOverlapRatio, projectFacilitiesHeadless, rectContains, rectanglesOverlap } from './layoutMath';
+import { pointInRect, projectedOverlapRatio, projectFacilitiesHeadless, rectContains, rectanglesOverlap, segmentIntersectsRect } from './layoutMath';
 import { NIVALIS_LAYOUT_INTENT, NIVALIS_PLACEMENT_PROFILES } from './nivalisLayoutIntent';
 import type { GeneratedPlanetLayout, TerrainDefinition } from './layoutTypes';
+import { prototypeAssetRegistry } from '../assets/prototypeAssetRegistry';
 
 export interface LayoutValidationResult {
   readonly reasons: readonly string[];
@@ -35,8 +36,9 @@ export function validateGeneratedLayout(layout: GeneratedPlanetLayout, terrain: 
   const hazards = terrain.areas.filter((area) => area.tags.includes('hazardZone') || area.tags.includes('blocked'));
   for (const facility of layout.facilities) {
     const profile = NIVALIS_PLACEMENT_PROFILES[facility.id];
-    if (!buildableAreas.some((area) => rectContains(area, facility.footprint))) reasons.push(`outside-buildable:${facility.id}`);
-    if (hazards.some((area) => rectanglesOverlap(area, facility.footprint))) reasons.push(`forbidden-terrain:${facility.id}`);
+    if (!buildableAreas.some((area) => rectContains(area, facility.visualFootprint))) reasons.push(`outside-buildable:${facility.id}`);
+    if (hazards.some((area) => rectanglesOverlap(area, facility.visualFootprint))) reasons.push(`forbidden-terrain:${facility.id}`);
+    if (facility.visualModules.some((module) => prototypeAssetRegistry.get(module.assetId) === undefined)) reasons.push(`unknown-visual-module:${facility.id}`);
     for (const tag of profile.requiredTerrainTags.filter((tag) => tag !== 'buildable')) {
       if (!terrain.areas.some((area) => area.tags.includes(tag) && pointInRect(facility.position, area))) reasons.push(`required-terrain:${facility.id}:${tag}`);
     }
@@ -49,12 +51,26 @@ export function validateGeneratedLayout(layout: GeneratedPlanetLayout, terrain: 
     for (let second = first + 1; second < layout.facilities.length; second += 1) {
       const a = layout.facilities[first];
       const b = layout.facilities[second];
-      if (a && b && rectanglesOverlap(a.footprint, b.footprint, Math.max(NIVALIS_PLACEMENT_PROFILES[a.id].minimumSeparation, NIVALIS_PLACEMENT_PROFILES[b.id].minimumSeparation))) reasons.push(`facility-overlap:${a.id}:${b.id}`);
+      if (a && b && rectanglesOverlap(a.visualFootprint, b.visualFootprint, Math.max(NIVALIS_PLACEMENT_PROFILES[a.id].minimumSeparation, NIVALIS_PLACEMENT_PROFILES[b.id].minimumSeparation))) reasons.push(`facility-overlap:${a.id}:${b.id}`);
     }
   }
   if (!graphConnected(layout)) reasons.push('navigation-disconnected');
   if (layout.roads.length !== layout.navigationEdges.length) reasons.push('road-navigation-source-mismatch');
+  for (const road of layout.roads) {
+    const targetFacilityId = layout.navigationEdges.find((edge) => edge.id === road.edgeId)?.to.replace(/-(approach|entrance)$/, '');
+    for (let index = 1; index < road.points.length; index += 1) {
+      const start = road.points[index - 1];
+      const end = road.points[index];
+      if (!start || !end) continue;
+      for (const facility of layout.facilities) {
+        if (road.role !== 'main-spine' && facility.id === targetFacilityId) continue;
+        if (segmentIntersectsRect(start, end, facility.visualFootprint, 0.15)) reasons.push(`road-compound-overlap:${road.edgeId}:${facility.id}`);
+      }
+    }
+  }
   if (layout.expansionSlots.length !== 1 || layout.expansionSlots.some((slot) => slot.footprintCapacity.width < 5 || slot.footprintCapacity.depth < 5)) reasons.push('expansion-capacity');
+  const expansion = layout.expansionSlots[0];
+  if (expansion && layout.facilities.some((facility) => rectanglesOverlap(facility.visualFootprint, { center: expansion.position, ...expansion.footprintCapacity }, 0.5))) reasons.push('expansion-overlap');
   const projected = projectFacilitiesHeadless(layout.facilities);
   for (let first = 0; first < projected.length; first += 1) for (let second = first + 1; second < projected.length; second += 1) {
     const a = projected[first];

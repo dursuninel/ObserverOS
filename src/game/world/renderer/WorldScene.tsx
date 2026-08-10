@@ -86,18 +86,12 @@ function Facility({ debugState, id, layout, simulationState }: { readonly debugS
       : 'normal';
   const signature = getFacilityVisualSignature(id, state, debugState.timeOfDay);
   const groupProps = { position: [placement.position[0], 0.18, placement.position[1]] as const, rotation: [0, placement.rotationY, 0] as const };
-  if (id === 'reactor') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('reactor-body')} /><RuntimeAsset asset={requirePrototypeAsset('reactor-tower')} /><FacilityActivity {...signature} height={3.75} /></group>;
-  if (id === 'solar') return <group {...groupProps}>{[[-1.8, 0, -0.55], [0, 0, -0.55], [1.8, 0, -0.55], [-0.9, 0, 0.7], [0.9, 0, 0.7]].map(([x, y, z], index) => <RuntimeAsset key={index} asset={requirePrototypeAsset('solar-panel')} position={[x ?? 0, y ?? 0, z ?? 0]} />)}<FacilityActivity {...signature} height={0.45} /></group>;
-  if (id === 'battery') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('battery-body')} /><RuntimeAsset asset={requirePrototypeAsset('battery-cargo')} /><FacilityActivity {...signature} height={1.65} /></group>;
-  if (id === 'mine') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('mine-drill')} /><FacilityActivity {...signature} height={2.8} /></group>;
-  if (id === 'habitat') return <group {...groupProps}>
-    <mesh position={[0.9, -0.13, 2.35]} rotation-x={-Math.PI / 2} scale={[1.35, 0.72, 1]}><circleGeometry args={[2.15, 10]} /><meshStandardMaterial color="#65787c" roughness={0.92} /></mesh>
-    <RuntimeAsset asset={requirePrototypeAsset('habitat')} />
-    <RuntimeAsset asset={requirePrototypeAsset('habitat-tunnel')} position={[1.35, 0, 0]} rotationY={Math.PI / 2} />
-    <RuntimeAsset asset={requirePrototypeAsset('habitat-annex')} position={[2.65, 0, 0.05]} />
-    <FacilityActivity {...signature} height={1.15} />
+  const activityHeight: Readonly<Record<FacilityId, number>> = { reactor: 3.75, solar: 0.45, battery: 1.65, mine: 2.8, habitat: 1.15, oxygen: 1.55 };
+  return <group {...groupProps} userData={{ visualVariantId: placement.visualVariantId }}>
+    <RuntimeAsset asset={requirePrototypeAsset(placement.primaryAssetId)} />
+    {placement.visualModules.map((module, index) => <RuntimeAsset asset={requirePrototypeAsset(module.assetId)} key={`${module.semanticVisualRole}-${index}`} position={[module.localPosition[0], module.semanticVisualRole === 'plaza' ? -0.12 : 0, module.localPosition[1]]} rotationY={module.rotationY} scaleMultiplier={module.scale} />)}
+    <FacilityActivity {...signature} height={activityHeight[id]} />
   </group>;
-  return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('oxygen')} /><RuntimeAsset asset={requirePrototypeAsset('oxygen-vent')} /><FacilityActivity {...signature} height={1.55} /></group>;
 }
 
 function StreetLights({ debugState, layout }: { readonly debugState: PrototypeDebugState; readonly layout: GeneratedPlanetLayout }) {
@@ -188,12 +182,10 @@ function MaintenanceActivity() {
 function Ground({ layout }: { readonly layout: GeneratedPlanetLayout }) {
   const plateau = useMemo(() => {
     const shape = new Shape();
-    const { minX, maxX, minZ, maxZ } = layout.cameraBounds;
-    const corners = [[minX + 1.2, minZ], [maxX - 1.2, minZ], [maxX, minZ + 1.2], [maxX, maxZ - 1.2], [maxX - 1.2, maxZ], [minX + 1.2, maxZ], [minX, maxZ - 1.2], [minX, minZ + 1.2]] as const;
-    corners.forEach(([x, z], index) => index === 0 ? shape.moveTo(x, z) : shape.lineTo(x, z));
+    layout.plateauVertices.forEach(([x, z], index) => index === 0 ? shape.moveTo(x, z) : shape.lineTo(x, z));
     shape.closePath();
     return shape;
-  }, [layout.cameraBounds]);
+  }, [layout.plateauVertices]);
   return (
     <group>
       <mesh receiveShadow position={[0, -0.08, 0]} rotation-x={-Math.PI / 2}>
