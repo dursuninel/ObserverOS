@@ -6,6 +6,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 import type { AssetDefinition } from '../assets/AssetRegistry';
 import { normalizeAssetMaterials } from './assetMaterialNormalization';
+import { usePresentationClock } from './presentationTimeContext';
 
 interface RuntimeAssetProps {
   readonly animation?: string;
@@ -16,6 +17,7 @@ interface RuntimeAssetProps {
 }
 
 export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY = 0, scaleMultiplier = 1 }: RuntimeAssetProps) {
+  const presentationClock = usePresentationClock();
   if (animation && (!asset.animationClips || !asset.animationClips.includes(animation))) {
     throw new Error(`Animation "${animation}" is not declared for prototype asset "${asset.id}".`);
   }
@@ -38,7 +40,7 @@ export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY
   }, [animation, asset.id, gltf.animations, mixer]);
 
   useEffect(() => () => { mixer?.stopAllAction(); }, [mixer]);
-  useFrame((_, delta) => mixer?.update(delta));
+  useFrame(() => mixer?.update(presentationClock.getDeltaSeconds()));
 
   const offset = asset.transform?.offset;
   return (

@@ -354,3 +354,158 @@ Test 2 kullanıcı görsel incelemesinden geçmedi. Test 2 ile kurulan ortak `Pr
 - Commit veya push yapılmadı; Faz 2 kullanıcı onayı bekleniyor.
 
 ---
+
+## Faz 2 — Test 3 / Simulation-Presentation Sync & Pause Invariant
+
+**Durum:** Kullanıcı onayı için hazır
+**Tarih:** 10 Ağustos 2026
+
+### Genel özet
+
+- Kanonik zaman ölçeği korunmuştur: temel step 1 simulation dakikası, ×1 hızda 1 simulation dakikası yaklaşık 0,417 gerçek saniyedir.
+- Kök neden, Faz 1 world presentation bileşenlerinin authoritative simulation speed yerine R3F `clock.elapsedTime` ve ham render delta kullanmasıydı.
+- Authoritative `SimulationSnapshot.clock.speed` tüketen, gameplay state taşımayan `PresentationClock` ve React/R3F adapter sınırı eklendi.
+- Colonist rota/pose sunumu, maintenance worker rota ve activity sunumu, GLTF animation mixer, facility activity pulse, snow ve local frozen haze bu presentation clock'a bağlandı.
+- Pause sırasında presentation elapsed/delta ilerlemez; Resume ve speed değişiklikleri clock'u sıfırlamaz. ×2 ve ×4 world presentation progression'ı sırasıyla ölçekler.
+- Kamera pan/zoom/focus/reset ve performans metriği render-time üzerinde bırakıldı; Pause sırasında UI ve kamera etkileşimi çalışmaya devam eder.
+- DEV diagnostic `LOCAL (SIM)`, `SIM STEP 1 dk`, `×1 RATE 1 sim dk ≈ 0.417 gerçek sn` ve `WORLD PRESENTATION RUNNING/PAUSED` açıklamalarını gösterir.
+
+### R3F time-source audit
+
+- Simulation-driven presentation: colonist, maintenance, facility pulse, maintenance sparks, GLTF mixer, snow ve haze yalnız presentation time kullanır.
+- Render-time kalanlar: `CameraRig` etkileşim interpolasyonu ve `MetricsProbe` FPS/frame-time ölçümü. Bunlar gameplay/world progression değildir ve Pause sırasında çalışmalıdır.
+- World renderer'da doğrudan `clock.elapsedTime`, `Date.now`, `performance.now`, timer veya browser-time gameplay kullanımı kalmamıştır.
+
+### Doğrulama
+
+- Lint: PASS — 0 hata, 0 uyarı
+- Typecheck: PASS
+- Test: PASS — 17 test dosyası, 101 test
+- Headless determinism/presentation/architecture matrisi: PASS — 7 dosya, 54 test
+- Production build: PASS — yalnız mevcut büyük bundle/chunk uyarısı sürüyor
+- `git diff --check`: PASS — yalnız Windows LF/CRLF bilgilendirme uyarıları var
+- Tarayıcı ×1: 1,25 gerçek saniyede 3 simulation dakikası ilerledi.
+- Tarayıcı ×2/×4: aynı gözlem aralığında sırasıyla 6/12 simulation dakikası ilerledi; world görüntüsü de ilerledi.
+- Tarayıcı Pause: LOCAL/ELAPSED durdu; world/canvas bölgesinden 1 saniye arayla alınan kareler byte düzeyinde aynı kaldı.
+- Pause sırasında kamera pan, zoom, “Koloniyi göster”, panel ve Mine command etkileşimi çalıştı.
+- Maintenance, snow, haze ve facility activity birlikte görünürken izole world/canvas kareleri Pause boyunca aynı kaldı; Resume'da tekrar ilerledi.
+
+### Kapsam sınırı ve deferred
+
+- Faz 3 Workforce assignment, gerçek travel task, Condition/wear, Maintenance queue/material/time ve failure/recovery uygulanmadı.
+- Prototype presentation schedule gameplay truth yapılmadı; yalnız authoritative speed ile görsel senkron sağlandı.
+- Yeni dependency eklenmedi. Commit veya push yapılmadı.
+
+---
+
+## Faz 2 — FINAL KAPANIŞ
+
+**Durum:** TAMAMLANDI — KULLANICI ONAYLI
+**Tarih:** 10 Ağustos 2026
+
+- Faz 2 Test 3 kullanıcı incelemesinden geçti.
+- Authoritative Simulation Core, browser runtime driver, DEV diagnostic ve simulation-presentation Pause/speed senkronu kullanıcı tarafından onaylandı.
+- `5b79087` commit mesajındaki “Faz 3 - Test 3” ifadesi yalnız isimlendirme hatasıdır; içerik Faz 2 Test 3'tür. Commit history değiştirilmedi.
+
+---
+
+## Faz 3 — Test 1 / Workforce + Maintenance Core Foundation
+
+**Durum:** Kullanıcı onayı için hazır
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-3-workforce-maintenance`
+
+### 1. STATE OWNERSHIP
+
+- Colonist, workforce assignment, travel, Condition, wear ve maintenance task state authoritative olarak `SimulationEngine`/domain katmanında tutulur.
+- Snapshot → presentation adapter → R3F yönü korunmuştur; Zustand, React ve renderer gameplay worker seçmez veya maintenance başlatmaz.
+
+### 2. POPULATION / ACTIVE WORKFORCE
+
+- Population, Active, Assigned, Available ve Resting ayrı authoritative değerlerdir.
+- Test fixture'ı 11 Population, 8 Active ve 3 staggered Resting ile başlar; normal facility taleplerinin toplamı 8'dir.
+
+### 3. COLONIST STATE MODEL
+
+- Stable `colonist-###` kimlikleri ile Available, Working ve Resting çekirdek durumları uygulandı.
+- Maintenance, Working assignment'ının task türüdür; Injured ve Evacuating eklenmedi.
+
+### 4. DETERMINISTIC ASSIGNMENT
+
+- Explicit comparator Critical → High → Normal → Low, stable facility ID ve stable task type sırasını uygular.
+- Minimum crew iki geçişli olarak nominal crew'den önce karşılanır; stable colonist ID seçimi ve valid assignment koruması churn'ü önler.
+
+### 5. REST / SHIFT
+
+- Data-driven, staggered rest grupları tüm workforce'un aynı anda sıfırlanmasını engeller.
+- Rest başlangıç/bitişleri simulation time ile ilerler ve semantic event üretir.
+
+### 6. TRAVEL TASK
+
+- Assignment travel state'i source location, target facility, task type, progress, duration ve timestamps içeren plain serializable domain verisidir.
+- Simulation progress authoritative; world path'i mevcut layout/road graph/A* sunum adapter'ı tarafından çözülür.
+
+### 7. CONDITION
+
+- Condition 0..100 ile Healthy, Worn, Critical ve Failed semantic bandları uygulandı.
+- Deterministic band interpolation actual facility output'u etkiler; 0 Condition output'u sıfırlar ve Failed durumuna geçirir.
+
+### 8. WEAR
+
+- Reactor, Mine, Oxygen Processor ve Thermal Control canonical base wear oranları config içindedir.
+- Eco ×0.5, Normal ×1 ve Boost ×2.5 yalnız fixed simulation time ile uygulanır; Pause'da wear ilerlemez.
+
+### 9. MAINTENANCE REQUEST / QUEUE
+
+- Condition <60 duplicate olmayan maintenance request üretir.
+- Queue MaintenancePriority ve stable facility ID ile deterministiktir; lifecycle Requested/Waiting/Traveling/InProgress/Completed ve bekleme nedeni snapshot'ta görünür.
+
+### 10. MATERIAL + WORKFORCE + TIME
+
+- Mine/Reactor/Oxygen/Thermal canonical Material, workforce ve duration gereksinimleri config-driven tanımlandı.
+- Material yalnız task rezerve edilip başlatılırken bir kez düşer; worker gerçek ortak havuzdan çekilir ve task simulation time ile ilerler.
+
+### 11. FAILURE / RECOVERY
+
+- Failed facility output üretmez, kalıcı yok edilmez ve şartları sağlanan maintenance ile deterministik olarak Healthy banda recover edilir.
+- Failure, recovery, condition-band ve maintenance lifecycle semantic event'leri stable ID, timestamp ve context taşır.
+
+### 12. WORLD PRESENTATION INTEGRATION
+
+- Faz 1 prototype colonist schedule gerçek workforce görünümünün kaynağı olmaktan çıkarıldı.
+- World, snapshot'taki colonist assignment/travel state'ini tüketir; maintenance worker work point'e yürür, working colonist indoor tesiste gizlenebilir.
+- PresentationClock Pause/speed mimarisi korunmuştur; kamera ve UI Pause sırasında çalışmaya devam eder.
+
+### 13. SAVEABLE TASK STATE
+
+- Authoritative workforce ve maintenance state plain serializable veri, stable IDs ve deterministic progress/timestamps kullanır; React/Three.js/function referansı içermez.
+- Export → JSON serialize/deserialize → restore → aynı simulation sonucu otomatik testle doğrulandı.
+
+### 14. DEV DIAGNOSTIC
+
+- DEV-only panel Population/Active/Assigned/Available/Resting; facility workforce; Condition/band; wear rate; maintenance state/priority/workers/material/remaining/reason alanlarını gösterir.
+- Mine Condition 59/29/0, maintenance priority ve kontrollü +60 sim dakika komutları eklendi; final HUD oluşturulmadı.
+
+### 15. AUTOMATED TESTS
+
+- Lint: PASS.
+- Typecheck: PASS.
+- Simulation-only typecheck: PASS.
+- Test: PASS — 19 dosya, 131 test.
+- Workforce/Maintenance + authoritative world matrix: PASS — 2 dosya, 29 test.
+- Production build: PASS — yalnız mevcut 500 kB chunk uyarısı sürüyor.
+
+### 16. BROWSER TEST RESULTS
+
+- Workforce invariant'ları, Condition 59 request/waiting, priority yükseltme, iki gerçek worker'ın havuzdan çekilmesi ve Mine'a yürümesi gözlendi.
+- 6 Material tek kez tüketildi; maintenance travel/in-progress/completion akışı ve deterministic reassignment doğrulandı.
+- Pause sırasında remaining time, elapsed simulation time ve world movement durdu; kamera/reset çalıştı. Resume aynı progress'ten devam etti.
+- Condition 29 Boost safety block; Condition 0 Failed/output 0; maintenance sonrası Healthy recovery doğrulandı.
+
+### 17. DEFERRED / SCOPE CHECK
+
+- Protocol Runtime/React Flow execution, final Debugger UI, Health, Assessment, campaign, save/load UI, injury, evacuation, Medical, Shelter ve Emergency Shift uygulanmadı.
+- Thermal canonical workforce/wear/maintenance config sözleşmesi hazırdır; yeni Thermal world/gameplay instance'ı yaratılmadı.
+- Yeni dependency eklenmedi. Commit veya push yapılmadı.
+
+FAZ 3 TEST 1 KULLANICI ONAYI İÇİN HAZIR

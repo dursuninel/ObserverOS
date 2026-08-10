@@ -21,31 +21,59 @@ export interface FacilitySafetyDefinition {
   readonly requiresRampedModeChange?: boolean;
 }
 
+export interface FacilityWorkforceDefinition {
+  readonly boost?: number;
+  readonly minimum: number;
+  readonly nominal: number;
+}
+
+export interface FacilityWearDefinition {
+  readonly basePerHour: number;
+}
+
+export interface FacilityMaintenanceDefinition {
+  readonly durationMinutes: number;
+  readonly material: number;
+  readonly offlineDuringMaintenance: boolean;
+  readonly restoreCondition: number;
+  readonly workforce: number;
+}
+
 export interface FacilityDefinition {
   readonly id: string;
   readonly initialCondition: number;
   readonly initialMode?: FacilityMode;
   readonly initialState: FacilityOperatingState;
   readonly modes?: Readonly<Partial<Record<FacilityMode, FacilityModeDefinition>>>;
+  readonly maintenance?: FacilityMaintenanceDefinition;
   readonly safety?: FacilitySafetyDefinition;
   readonly storageCapacity?: Readonly<Partial<Record<ResourceId, number>>>;
   readonly typeId: string;
+  readonly wear?: FacilityWearDefinition;
+  readonly workforce?: FacilityWorkforceDefinition;
 }
 
 export interface FacilityInstanceState {
+  readonly assignedWorkforce: number;
   readonly condition: number;
+  readonly conditionBand: 'healthy' | 'worn' | 'critical' | 'failed';
   readonly energyPriority: Priority;
+  readonly effectiveWorkforce: number;
   readonly id: string;
   readonly maintenancePriority: Priority;
   readonly mode: FacilityMode | null;
+  readonly requiredBoostWorkforce: number | null;
+  readonly requiredMinimumWorkforce: number;
+  readonly requiredNominalWorkforce: number;
   readonly setpoints: Readonly<Record<string, number | string | boolean>>;
   readonly state: FacilityOperatingState;
   readonly typeId: string;
+  readonly wearRatePerHour: number;
   readonly workPriority: Priority;
 }
 
 export interface FacilityCommandRequest {
-  readonly actuator: 'set-energy-priority' | 'set-mode' | 'set-operating-state' | 'set-setpoint';
+  readonly actuator: 'set-condition' | 'set-energy-priority' | 'set-maintenance-priority' | 'set-mode' | 'set-operating-state' | 'set-setpoint' | 'set-work-priority';
   readonly facilityId: string;
   readonly id: string;
   readonly priority: Priority;
