@@ -15,4 +15,9 @@ export const tr = {
     safe: { right: 'SAĞ PANEL GÜVENLİ ALANI', bottom: 'ALT NAVİGASYON GÜVENLİ ALANI' },
     legend: { pan: 'Sürükle: kamerayı kaydır', zoom: 'Tekerlek: yakınlaştır' },
   },
+  simulationDiagnostic: {
+    mineCommands: 'Maden simulation komutları',
+    speedControls: 'Simulation hız kontrolleri',
+    title: 'SIMULATION DIAGNOSTIC',
+  },
 } as const;

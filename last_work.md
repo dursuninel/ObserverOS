@@ -307,3 +307,50 @@ Test 2 kullanıcı görsel incelemesinden geçmedi. Test 2 ile kurulan ortak `Pr
 - Bu çalışma yalnız Faz 1 presentation prototype kapsamındadır. Simulation Core, gerçek Workforce/Maintenance, gameplay state, final HUD ve Faz 2 uygulanmadı.
 - Faz 1 tamamlandı veya onaylandı olarak işaretlenmedi; kullanıcı görsel incelemesi bekleniyor.
 - Commit veya push yapılmadı; kullanıcı talimatı bekleniyor.
+## Faz 2 — Test 2 / Runtime Integration & Final Acceptance
+
+**Durum:** Kullanıcı onayı için hazır
+**Tarih:** 10 Ağustos 2026
+
+### Genel özet
+
+- Çalışma `phase-2-simulation-core` dalında yürütüldü; commit veya push yapılmadı.
+- `BrowserSimulationDriver`, browser `requestAnimationFrame` zaman farklarını yalnız wall-time girdisi olarak authoritative `SimulationEngine`'e taşır. FPS'e bağlı gameplay kararı vermez; 1000 ms/frame catch-up limiti aşan süreyi atmak yerine backlog olarak sonraki frame'lerde tüketir.
+- `SimulationProvider`, driver'ı mount sırasında başlatır ve unmount sırasında durdurur. Simulation Core browser API, React, Zustand veya Three.js bağımlılığı kazanmadı.
+- Geliştirme moduna özel `SimulationDiagnostic`, authoritative snapshot'tan gün/saat/day phase, elapsed simulation time, hız, Energy/Oxygen/Material stored-capacity ve actual production/consumption/net oranlarını, ayrıca Mine state/mode/priority bilgisini gösterir.
+- Diagnostic Pause/×1/×2/×4 ve Mine Eco/Normal/Boost/Offline/Online komutlarını doğrudan engine sözleşmesine yollar; sonuç paneli gerçek `FacilityCommandResult` durumunu ve reason code'u gösterir.
+- Diagnostic yalnız `import.meta.env.DEV` altında render edilir. Production preview'da koloni görünürken diagnostic test-id sayısı 0 ve diagnostic başlığı yoktu.
+- Yeni dependency eklenmedi; Faz 1 world renderer ve kamera davranışları korunmuştur.
+
+### Tarayıcı doğrulaması
+
+- Runtime progression: ×1 açıkken simulation zamanı kendiliğinden ilerledi.
+- Yaklaşık 3 saniyelik gözlemde simulation dakika ilerlemeleri: ×1 `7`, Pause `0`, ×2 `15`, ×4 `29`; kanonik hız oranları gözlendi.
+- Mine Eco: actual Material üretimi `+6/h`; komut sonucu `applied`.
+- Mine Normal: actual Material üretimi `+12/h`; komut sonucu `applied`.
+- Mine Boost: actual Material üretimi `+18/h`; komut sonucu `applied`.
+- Mine Offline: Mine Energy tüketimi ve Material üretimi `0`; stok silinmedi; komut sonucu `applied`.
+- Mine Online: önceki Normal çalışma etkileri geri geldi; komut sonucu `applied`.
+- Energy storage doluyken actual üretim talebe clamp edildi; diagnostic bunu örneğin `+28 −28 = 0/h` olarak authoritative snapshot'tan gösterdi.
+- Day/local time/day phase gerçek runtime boyunca ilerledi. Otomatik runtime testi `localMinute=840` değerinde night geçişini doğruladı.
+- Faz 1 world, colonist hareketi, kamera pan ve “Koloniyi göster” reset davranışı runtime entegrasyonu altında çalışmaya devam etti.
+
+### Otomatik doğrulama
+
+- Lint: PASS — 0 hata
+- Typecheck: PASS
+- Test: PASS — 16 test dosyası, 88 test
+- Faz 2 headless determinism/runtime matrisi: PASS — 6 test dosyası, 41 test
+- Production build: PASS — yalnız mevcut büyük bundle/chunk uyarısı sürüyor
+- Production DEV diagnostic görünmezliği: PASS
+- `git diff --check`: PASS — yalnız Git'in Windows LF/CRLF bilgilendirme uyarıları var
+
+### Kapsam sınırı ve deferred
+
+- Faz 3 Workforce, colonist job AI, Condition/wear ve Maintenance gameplay uygulanmadı.
+- Protocol Runtime/Compiler, Graph Editor execution, Debugger UI, final HUD, Colony Health/Assessment, campaign/sectors ve yeni gameplay içeriği uygulanmadı.
+- Save/load continuity eklenmedi.
+- Production diagnostic UI eklenmedi; diagnostic bilinçli olarak DEV-only tutuldu.
+- Commit veya push yapılmadı; Faz 2 kullanıcı onayı bekleniyor.
+
+---
