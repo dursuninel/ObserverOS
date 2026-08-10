@@ -184,6 +184,47 @@ Gerçek gameplay ve Simulation Core uygulanmadan, kanonik NIVALIS kolonisi için
 
 ---
 
+## Faz 1 — Test 4 / Camera & Habitat Presentation düzeltmesi
+
+**Durum:** Faz 1 — Kullanıcı incelemesine hazır
+**Tarih:** 10 Ağustos 2026
+
+Test 3 kısmi kullanıcı başarısının ardından yalnız kalan kritik Faz 1 world-presentation sorunları düzeltildi:
+
+- Kamera sürüklemesindeki `horizontalGesture` / `verticalGesture` ve 1.35 oranlı eksen kilidi tamamen kaldırıldı. Pointer hareketi artık kesintisiz iki boyutlu screen-space vektör olarak gerçek kamera-ground basis'ine yansıtılır.
+- Pan hedefi world X/Z kutusunda değil, güvenli overview hedefine göre camera-right ve camera-up scalar'larıyla bağımsız ve simetrik clamp edilir. Limitler viewport, açık panelin güvenli alanı, layout bounds ve orthographic zoom'dan türetilir; bir eksenin sınırı diğer eksene hareket aktarmaz.
+- Habitat rest, staging ve departure noktaları absolute world koordinatlarından çıkarıldı. Noktalar Habitat compound local uzayında tanımlanıp placement + rotation ile world uzayına çevrilir; taşınmış/döndürülmüş Habitat fixture'ı test edildi.
+- Resting görünürlüğü deterministic seeded profile ile outdoor/invisible olarak ayrıldı. Rest noktaları Habitat binası, annex, plaza ve road entrance çevresine yayıldı; tekrar eden cohort'lara deterministic küçük offset verildi.
+- Visible-road A* graph, mesafe/hız tabanlı yürüyüş süresi, astronot varyantları ve maintenance route/activity korundu. Fazların deterministic dağılımı ile presentation çalışma/dinlenme süreleri, 15 ve 50 kolonistte intersection yoğunluğunu azaltacak şekilde ayarlandı.
+- Kullanıcının eski toplanma noktasında fark ettiği obje kesin olarak `floor-light` idi: kaynak `assets-source/quaternius-modular/Models/Props/Prop_Light_Floor.gltf`, runtime asset `/assets/runtime/modular/Prop_Light_Floor.gltf`. Obje Habitat plaza/road aydınlatması olarak doğru yerdeydi; sorun eski absolute rest noktalarının kolonistleri çevresine toplamasıydı.
+- Falling snow, local frozen haze, irregular plateau, ortak `PrototypeLayout`, Habitat compound ve kamera reset / “Koloniyi göster” davranışları korunmuştur.
+
+### Manuel doğrulama
+
+- Kamera: yukarı, aşağı, sol, sağ, iki 45° çapraz, dört maksimum sınır ve sınırda ikinci eksenin devamı PASS. Yön değiştirme, diagonal snap veya eksenler arası enerji aktarımı gözlenmedi.
+- 15 kolonist: son ayardan sonra 30+ saniye izlendi. Tek merkezli büyük gathering blob, tek koordinat üst üste binmesi veya ana intersection'ın sürekli tıkanması gözlenmedi; outdoor resting karakterleri Habitat compound çevresinde kaldı.
+- 50 kolonist: son ayardan sonra 30+ saniye stress turu izlendi. Yoğunluk beklenen şekilde arttı; hareketli gruplar zaman içinde dağıldı ve tek rest noktası/tek road tile üzerinde kalıcı büyük üst üste binme gözlenmedi.
+- Kar ve sis kamera sürüklemeleri boyunca açık tutularak okunabilirlik ve davranış birlikte doğrulandı.
+- Sahne inceleme sonunda 15 kolonist ve genel görünüm presetine döndürüldü.
+
+### Otomatik doğrulama
+
+- Lint: PASS
+- Typecheck: PASS
+- Test: PASS — 12 test dosyası, 52 test
+- Production build: PASS — yalnız mevcut 1.48 MB bundle/chunk-size uyarısı sürüyor
+- Camera pure-math: 8 test PASS
+- Prototype layout/local-to-world: 9 test PASS
+- Navigation/deterministic 15–50 distribution: 10 test PASS
+
+### Kapsam sınırı
+
+- Faz 2, final HUD, facility hover/click/selection, gerçek gameplay, Simulation Core, Workforce/Maintenance gameplay veya yeni interaction sistemi uygulanmadı.
+- Faz 1 tamamlandı ya da onaylandı olarak işaretlenmedi; kullanıcı görsel incelemesi bekleniyor.
+- Commit veya push yapılmadı.
+
+---
+
 ## Faz 1 — Test 3 / World Presentation & Life Pass
 
 **Durum:** Faz 1 — Kullanıcı incelemesine hazır

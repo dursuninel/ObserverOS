@@ -1,4 +1,4 @@
-import { getFacilityPlacement, getFacilityWorkPoint, getRoadNeighbors, getRoadNode, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
+import { getFacilityPlacement, getFacilityWorkPoint, getHabitatPresentationPoints, getRoadNeighbors, getRoadNode, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
 
 const distance = (left: Point2, right: Point2): number => Math.hypot(left[0] - right[0], left[1] - right[1]);
 
@@ -66,24 +66,36 @@ export interface ColonistSchedule {
   readonly phaseOffset: number;
   readonly restDuration: number;
   readonly restPointIndex: number;
+  readonly restVisible: boolean;
   readonly stagingPointIndex: number;
   readonly walkingSpeed: number;
   readonly workingDuration: number;
 }
 
 const destinations = ['reactor', 'solar', 'battery', 'mine', 'oxygen'] as const;
-const laneOffsets = [-0.24, -0.16, -0.08, 0.08, 0.16, 0.24] as const;
+const laneOffsets = [-0.38, -0.28, -0.18, -0.08, 0.08, 0.18, 0.28, 0.38] as const;
 
 const toWorld = ([x, z]: Point2): readonly [number, number, number] => [x, 0.32, z];
 const roadPathPoints = (ids: readonly string[]): readonly Point2[] => ids.map((id) => getRoadNode(id).position);
+
+function getDistributedRestPoint(index: number, points: readonly Point2[]): Point2 {
+  const pointIndex = (index * 7) % points.length;
+  const base = points[pointIndex] ?? points[0] ?? [1.5, -1];
+  const cohort = Math.floor(index / Math.max(1, points.length));
+  if (cohort === 0) return base;
+  const angle = seededUnit(index, 9) * Math.PI * 2;
+  const radius = cohort * 0.16;
+  return [base[0] + Math.cos(angle) * radius, base[1] + Math.sin(angle) * radius];
+}
 
 export function getPolylineDistance(points: readonly Point2[]): number {
   return points.slice(1).reduce((total, point, index) => total + distance(points[index] ?? point, point), 0);
 }
 
 function getPresentationPaths(index: number, destination: ColonistSchedule['destination']): { readonly inbound: readonly Point2[]; readonly outbound: readonly Point2[] } {
-  const restPoint = PROTOTYPE_LAYOUT.habitat.restPoints[(index * 7) % PROTOTYPE_LAYOUT.habitat.restPoints.length] ?? PROTOTYPE_LAYOUT.habitat.restPoints[0] ?? [1.5, -1];
-  const stagingPoint = PROTOTYPE_LAYOUT.habitat.stagingPoints[(index * 5 + 1) % PROTOTYPE_LAYOUT.habitat.stagingPoints.length] ?? [1.5, -1];
+  const habitat = getHabitatPresentationPoints();
+  const restPoint = getDistributedRestPoint(index, habitat.restPoints);
+  const stagingPoint = habitat.stagingPoints[(index * 5 + 1) % habitat.stagingPoints.length] ?? [1.5, -1];
   const road = roadPathPoints(findPath('habitat-entrance', `${destination}-entrance`));
   return { outbound: [stagingPoint, ...road], inbound: [...road].reverse().concat([restPoint]) };
 }
@@ -94,18 +106,19 @@ export function getColonistSchedule(index: number): ColonistSchedule {
   const walkingSpeed = 0.9 + seededUnit(index, 2) * 0.32;
   const outboundDistance = getPolylineDistance(paths.outbound);
   const inboundDistance = getPolylineDistance(paths.inbound);
-  const restDuration = 2.4 + seededUnit(index, 3) * 4.8;
+  const restDuration = 7 + seededUnit(index, 3) * 7;
   const assignmentDuration = 0.45 + seededUnit(index, 4) * 0.75;
-  const workingDuration = 2.8 + seededUnit(index, 5) * 5.2;
+  const workingDuration = 14 + seededUnit(index, 5) * 12;
   const outboundDuration = outboundDistance / walkingSpeed;
   const inboundDuration = inboundDistance / walkingSpeed;
   const cycleDuration = restDuration + assignmentDuration + outboundDuration + workingDuration + inboundDuration;
   return {
     assignmentDuration, cycleDuration, destination, inboundDistance, inboundDuration,
     laneOffset: laneOffsets[index % laneOffsets.length] ?? 0.08,
-    outboundDistance, outboundDuration, phaseOffset: seededUnit(index, 6) * cycleDuration,
-    restDuration, restPointIndex: (index * 7) % PROTOTYPE_LAYOUT.habitat.restPoints.length,
-    stagingPointIndex: (index * 5 + 1) % PROTOTYPE_LAYOUT.habitat.stagingPoints.length,
+    outboundDistance, outboundDuration, phaseOffset: (((index + 1) * 0.61803398875) % 1) * cycleDuration,
+    restDuration, restPointIndex: (index * 7) % PROTOTYPE_LAYOUT.habitat.localRestPoints.length,
+    restVisible: seededUnit(index, 8) >= 0.65,
+    stagingPointIndex: (index * 5 + 1) % PROTOTYPE_LAYOUT.habitat.localStagingPoints.length,
     walkingSpeed, workingDuration,
   };
 }
@@ -135,11 +148,12 @@ function interpolatePolyline(points: readonly Point2[], progress: number, state:
 export function getColonistPose(index: number, elapsedSeconds: number): ColonistPose {
   const schedule = getColonistSchedule(index);
   const paths = getPresentationPaths(index, schedule.destination);
+  const habitat = getHabitatPresentationPoints();
   const cycle = (elapsedSeconds + schedule.phaseOffset) % schedule.cycleDuration;
-  const restPoint = PROTOTYPE_LAYOUT.habitat.restPoints[schedule.restPointIndex] ?? [1.5, -1];
-  const stagingPoint = PROTOTYPE_LAYOUT.habitat.stagingPoints[schedule.stagingPointIndex] ?? [1.5, -1];
+  const restPoint = getDistributedRestPoint(index, habitat.restPoints);
+  const stagingPoint = habitat.stagingPoints[schedule.stagingPointIndex] ?? [1.5, -1];
   let cursor = schedule.restDuration;
-  if (cycle < cursor) return { animation: 'Idle', position: toWorld(restPoint), rotationY: seededUnit(index, 7) * Math.PI * 2, state: 'resting', visible: true };
+  if (cycle < cursor) return { animation: 'Idle', position: toWorld(restPoint), rotationY: seededUnit(index, 7) * Math.PI * 2, state: 'resting', visible: schedule.restVisible };
   cursor += schedule.assignmentDuration;
   if (cycle < cursor) return { animation: 'Idle', position: toWorld(stagingPoint), rotationY: 0, state: 'assigned', visible: true };
   cursor += schedule.outboundDuration;
@@ -159,14 +173,15 @@ export interface MaintenancePose extends ColonistPose {
 export function getMaintenanceCycleDuration(facility: 'mine' | 'reactor'): number {
   const path = roadPathPoints(findPath('habitat-entrance', `${facility}-entrance`));
   const workPoint = getFacilityWorkPoint(facility);
-  const travel = getPolylineDistance([...path, workPoint]);
+  const departure = getHabitatPresentationPoints().departurePoints[1] ?? [1.5, -1];
+  const travel = getPolylineDistance([departure, ...path, workPoint]);
   return 1.2 + travel / 1.05 + 5.2 + travel / 1.05 + 1.8;
 }
 
 export function getMaintenancePose(facility: 'mine' | 'reactor', elapsedSeconds: number): MaintenancePose {
   const path = roadPathPoints(findPath('habitat-entrance', `${facility}-entrance`));
   const workPoint = getFacilityWorkPoint(facility);
-  const outbound = [PROTOTYPE_LAYOUT.habitat.departurePoints[1] ?? [1.5, -1], ...path, workPoint] as readonly Point2[];
+  const outbound = [getHabitatPresentationPoints().departurePoints[1] ?? [1.5, -1], ...path, workPoint] as readonly Point2[];
   const inbound = [...outbound].reverse();
   const travelDuration = getPolylineDistance(outbound) / 1.05;
   const cycleDuration = 1.2 + travelDuration + 5.2 + travelDuration + 1.8;

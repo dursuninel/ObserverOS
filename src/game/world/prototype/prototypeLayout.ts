@@ -47,10 +47,12 @@ const spineNodes: readonly PrototypeRoadNode[] = [
   { id: 'spine-expansion', kind: 'spine', light: false, position: [9.5, 0] },
 ] as const;
 
-function rotateLocalPoint(point: { readonly x: number; readonly z: number }, rotationY: number): Point2 {
-  const cosine = Math.cos(rotationY);
-  const sine = Math.sin(rotationY);
-  return [point.x * cosine + point.z * sine, -point.x * sine + point.z * cosine];
+export function transformLocalPointToWorld(point: Point2, placement: Pick<PrototypeFacilityPlacement, 'position' | 'rotationY'>): Point2 {
+  const cosine = Math.cos(placement.rotationY);
+  const sine = Math.sin(placement.rotationY);
+  const rotatedX = point[0] * cosine + point[1] * sine;
+  const rotatedZ = -point[0] * sine + point[1] * cosine;
+  return [placement.position[0] + rotatedX, placement.position[1] + rotatedZ];
 }
 
 export function getFacilityPlacement(id: LayoutEntityId): PrototypeFacilityPlacement {
@@ -71,16 +73,14 @@ export function getFacilityEntrance(id: LayoutEntityId): Point2 {
   const placement = getFacilityPlacement(id);
   const asset = requirePrototypeAsset(placement.primaryAssetId);
   if (!asset.entrancePoint) throw new Error(`Prototype facility "${id}" has no entrance point.`);
-  const rotated = rotateLocalPoint(asset.entrancePoint, placement.rotationY);
-  return [placement.position[0] + rotated[0], placement.position[1] + rotated[1]];
+  return transformLocalPointToWorld([asset.entrancePoint.x, asset.entrancePoint.z], placement);
 }
 
 export function getFacilityWorkPoint(id: FacilityId): Point2 {
   const placement = getFacilityPlacement(id);
   const asset = requirePrototypeAsset(placement.primaryAssetId);
   if (!asset.workPoint) throw new Error(`Prototype facility "${id}" has no work point.`);
-  const rotated = rotateLocalPoint(asset.workPoint, placement.rotationY);
-  return [placement.position[0] + rotated[0], placement.position[1] + rotated[1]];
+  return transformLocalPointToWorld([asset.workPoint.x, asset.workPoint.z], placement);
 }
 
 const connectionSpine: Readonly<Record<LayoutEntityId, string>> = {
@@ -112,14 +112,14 @@ export const PROTOTYPE_LAYOUT = {
   roadEdges: [...spineEdges, ...facilityEdges] as readonly PrototypeRoadEdge[],
   roadNodes,
   habitat: {
-    departurePoints: [[1.05, -1.05], [1.5, -1.02], [1.95, -1.05]] as readonly Point2[],
-    restPoints: [
-      [-0.25, -1.12], [0.2, -0.72], [0.55, -1.2], [0.9, -0.55],
-      [1.3, -1.28], [1.7, -0.55], [2.1, -1.25], [2.45, -0.62],
-      [2.85, -1.18], [3.2, -0.55], [3.55, -1.12], [3.95, -0.72],
-      [0.35, -0.22], [1.1, -0.25], [2.25, -0.24], [3.35, -0.24],
+    localDeparturePoints: [[-0.7, 2.65], [0, 2.82], [0.7, 2.65]] as readonly Point2[],
+    localRestPoints: [
+      [-2.25, -0.65], [-2.45, 0.15], [-2.35, 1.05], [-2.05, 1.9],
+      [-1.45, 2.75], [-0.75, 3.2], [0.1, 3.25], [0.95, 3.18],
+      [1.8, 3.12], [2.65, 3], [3.35, 2.6], [3.9, 1.8],
+      [4.15, 1], [4.25, 0.15], [4.05, -0.7], [3.55, -1.25],
     ] as readonly Point2[],
-    stagingPoints: [[0.7, -0.88], [1.25, -0.72], [1.75, -0.72], [2.3, -0.88]] as readonly Point2[],
+    localStagingPoints: [[-0.92, 2.72], [-0.38, 3.02], [0.6, 3.05], [1.48, 2.92]] as readonly Point2[],
   },
   plateauVertices: [
     [-10.8, -4.8], [-8.7, -7], [-4.8, -7.8], [-1.2, -7.4], [2.4, -8.1], [6.5, -7.2],
@@ -133,6 +133,18 @@ export const PROTOTYPE_LAYOUT = {
     transitionRocks: [[-8.8, -2.7, 0.4], [-8.5, 2.7, 1.2], [10.7, -1.8, 2.4], [7.5, 7.1, 0.8], [-4.8, 7, 1.7], [-0.8, -7, 2.8]] as const,
   },
 } as const;
+
+export function getHabitatPresentationPoints(placement: Pick<PrototypeFacilityPlacement, 'position' | 'rotationY'> = getFacilityPlacement('habitat')): {
+  readonly departurePoints: readonly Point2[];
+  readonly restPoints: readonly Point2[];
+  readonly stagingPoints: readonly Point2[];
+} {
+  return {
+    departurePoints: PROTOTYPE_LAYOUT.habitat.localDeparturePoints.map((point) => transformLocalPointToWorld(point, placement)),
+    restPoints: PROTOTYPE_LAYOUT.habitat.localRestPoints.map((point) => transformLocalPointToWorld(point, placement)),
+    stagingPoints: PROTOTYPE_LAYOUT.habitat.localStagingPoints.map((point) => transformLocalPointToWorld(point, placement)),
+  };
+}
 
 export function getPrototypeWorldBounds(): { readonly maxX: number; readonly maxZ: number; readonly minX: number; readonly minZ: number } {
   const points: Point2[] = [...PROTOTYPE_LAYOUT.plateauVertices, ...PROTOTYPE_LAYOUT.roadNodes.map((node) => node.position)];

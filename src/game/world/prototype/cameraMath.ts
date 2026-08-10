@@ -1,11 +1,19 @@
 import type { CameraPreset } from './types';
 import { getFacilityPlacement, getPrototypeWorldBounds, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
 
-export interface CameraBounds {
-  readonly maxX: number;
-  readonly maxZ: number;
-  readonly minX: number;
-  readonly minZ: number;
+export interface CameraGroundBasis {
+  readonly right: Point2;
+  readonly up: Point2;
+}
+
+export interface CameraPanLimits {
+  readonly right: number;
+  readonly up: number;
+}
+
+export interface CameraPanScalars {
+  readonly right: number;
+  readonly up: number;
 }
 
 export interface CameraZoomRange {
@@ -22,27 +30,85 @@ const normalize = (x: number, z: number): Point2 => {
   return [x / length, z / length];
 };
 
+export function getCameraGroundBasis(cameraOffset: readonly [number, number, number] = CAMERA_OFFSET): CameraGroundBasis {
+  const up = normalize(-cameraOffset[0], -cameraOffset[2]);
+  return { right: normalize(-up[1], up[0]), up };
+}
+
+export function mapScreenDragToPanScalars(deltaX: number, deltaY: number, scale: number): CameraPanScalars {
+  return { right: deltaX * scale, up: -deltaY * scale };
+}
+
+export function panScalarsToWorldOffset(scalars: CameraPanScalars, basis: CameraGroundBasis): Point2 {
+  return [
+    -basis.right[0] * scalars.right - basis.up[0] * scalars.up,
+    -basis.right[1] * scalars.right - basis.up[1] * scalars.up,
+  ];
+}
+
 export function mapScreenDragToWorldPan(deltaX: number, deltaY: number, scale: number, cameraOffset: readonly [number, number, number] = CAMERA_OFFSET): Point2 {
-  const forward = normalize(-cameraOffset[0], -cameraOffset[2]);
-  const right = normalize(-forward[1], forward[0]);
-  return mapScreenDragWithBasis(deltaX, deltaY, scale, right, forward);
+  return panScalarsToWorldOffset(mapScreenDragToPanScalars(deltaX, deltaY, scale), getCameraGroundBasis(cameraOffset));
 }
 
 export function mapScreenDragWithBasis(deltaX: number, deltaY: number, scale: number, cameraRight: Point2, cameraUpOnGround: Point2): Point2 {
-  return [(-cameraRight[0] * deltaX + cameraUpOnGround[0] * deltaY) * scale, (-cameraRight[1] * deltaX + cameraUpOnGround[1] * deltaY) * scale];
+  return panScalarsToWorldOffset(mapScreenDragToPanScalars(deltaX, deltaY, scale), { right: cameraRight, up: cameraUpOnGround });
 }
 
-export function getCameraPanBounds(): CameraBounds {
+const projectedHalfExtent = (axis: Point2): number => {
   const world = getPrototypeWorldBounds();
   const centerX = (world.minX + world.maxX) / 2;
   const centerZ = (world.minZ + world.maxZ) / 2;
-  const halfX = (world.maxX - world.minX) * 0.18;
-  const halfZ = (world.maxZ - world.minZ) * 0.16;
-  return { minX: centerX - halfX, maxX: centerX + halfX, minZ: centerZ - halfZ, maxZ: centerZ + halfZ };
+  const corners: readonly Point2[] = [
+    [world.minX, world.minZ], [world.minX, world.maxZ],
+    [world.maxX, world.minZ], [world.maxX, world.maxZ],
+  ];
+  return Math.max(...corners.map(([x, z]) => Math.abs((x - centerX) * axis[0] + (z - centerZ) * axis[1])));
+};
+
+export function getCameraPanLimits(
+  viewportWidth: number,
+  viewportHeight: number,
+  zoom: number,
+  panelOpen: boolean,
+  basis: CameraGroundBasis = getCameraGroundBasis(),
+): CameraPanLimits {
+  const mobile = viewportWidth <= 720;
+  const safeWidth = Math.max(1, viewportWidth - (!mobile && panelOpen ? 360 : 0));
+  const safeHeight = Math.max(1, viewportHeight * (mobile && panelOpen ? 0.62 : 1));
+  const visibleRightHalf = safeWidth / (2 * Math.max(zoom, 1));
+  const visibleUpHalf = safeHeight / (2 * Math.max(zoom, 1));
+  const rightExtent = projectedHalfExtent(basis.right);
+  const upExtent = projectedHalfExtent(basis.up);
+  const overviewZoom = getCameraZoomRange(viewportWidth, panelOpen).overview;
+  const zoomSensitiveCapRatio = Math.min(0.42, Math.max(0.22, 0.3 * zoom / overviewZoom));
+  const limitFor = (extent: number, visibleHalf: number) => Math.min(
+    extent * zoomSensitiveCapRatio,
+    Math.max(extent * 0.12, extent - visibleHalf * 0.7),
+  );
+  return { right: limitFor(rightExtent, visibleRightHalf), up: limitFor(upExtent, visibleUpHalf) };
 }
 
-export function clampCameraTarget(target: Point2, bounds: CameraBounds = getCameraPanBounds()): Point2 {
-  return [Math.min(bounds.maxX, Math.max(bounds.minX, target[0])), Math.min(bounds.maxZ, Math.max(bounds.minZ, target[1]))];
+export function clampCameraPanScalars(scalars: CameraPanScalars, limits: CameraPanLimits): CameraPanScalars {
+  return {
+    right: Math.min(limits.right, Math.max(-limits.right, scalars.right)),
+    up: Math.min(limits.up, Math.max(-limits.up, scalars.up)),
+  };
+}
+
+export function clampCameraTargetInScreenSpace(
+  target: Point2,
+  origin: Point2,
+  basis: CameraGroundBasis,
+  limits: CameraPanLimits,
+): Point2 {
+  const offsetX = target[0] - origin[0];
+  const offsetZ = target[1] - origin[1];
+  const clamped = clampCameraPanScalars({
+    right: -(offsetX * basis.right[0] + offsetZ * basis.right[1]),
+    up: -(offsetX * basis.up[0] + offsetZ * basis.up[1]),
+  }, limits);
+  const worldOffset = panScalarsToWorldOffset(clamped, basis);
+  return [origin[0] + worldOffset[0], origin[1] + worldOffset[1]];
 }
 
 export function getCameraZoomRange(viewportWidth: number, panelOpen: boolean): CameraZoomRange {

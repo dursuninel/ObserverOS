@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { allRoadNodeIds, findPath } from '../../src/game/world/prototype/navigation';
-import { getFacilityFootprint, getRoadNode, getRoadNeighbors, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT, segmentIntersectsFootprint } from '../../src/game/world/prototype/prototypeLayout';
+import { getFacilityFootprint, getFacilityPlacement, getHabitatPresentationPoints, getRoadNode, getRoadNeighbors, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT, segmentIntersectsFootprint, transformLocalPointToWorld } from '../../src/game/world/prototype/prototypeLayout';
 
 const entityIds = ['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen', 'expansion'] as const;
 
@@ -71,5 +71,21 @@ describe('handcrafted prototype layout', () => {
   it('detects a segment that really crosses a footprint', () => {
     const footprint = getFacilityFootprint('reactor');
     expect(segmentIntersectsFootprint([footprint.center[0] - 4, footprint.center[1]], [footprint.center[0] + 4, footprint.center[1]], footprint)).toBe(true);
+  });
+
+  it('derives Habitat presentation points from local coordinates', () => {
+    const placement = getFacilityPlacement('habitat');
+    const points = getHabitatPresentationPoints();
+    expect(points.restPoints[0]).toEqual(transformLocalPointToWorld(PROTOTYPE_LAYOUT.habitat.localRestPoints[0] ?? [0, 0], placement));
+    expect(points.stagingPoints).toHaveLength(PROTOTYPE_LAYOUT.habitat.localStagingPoints.length);
+    expect(points.departurePoints).toHaveLength(PROTOTYPE_LAYOUT.habitat.localDeparturePoints.length);
+  });
+
+  it('moves and rotates every Habitat presentation point with its placement', () => {
+    const original = getHabitatPresentationPoints({ position: [1.5, -3.6], rotationY: 0 });
+    const moved = getHabitatPresentationPoints({ position: [8.5, 2.4], rotationY: Math.PI / 2 });
+    const expected = PROTOTYPE_LAYOUT.habitat.localRestPoints.map((point) => transformLocalPointToWorld(point, { position: [8.5, 2.4], rotationY: Math.PI / 2 }));
+    expect(moved.restPoints).toEqual(expected);
+    expect(moved.restPoints).not.toEqual(original.restPoints);
   });
 });

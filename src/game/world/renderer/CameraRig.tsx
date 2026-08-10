@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MathUtils, OrthographicCamera, Vector3 } from 'three';
 
-import { CAMERA_OFFSET, clampCameraTarget, clampCameraZoom, getCameraPresetTarget, getCameraZoomRange, mapScreenDragWithBasis } from '../prototype/cameraMath';
+import { CAMERA_OFFSET, clampCameraTargetInScreenSpace, clampCameraZoom, getCameraPanLimits, getCameraPresetTarget, getCameraZoomRange, mapScreenDragWithBasis } from '../prototype/cameraMath';
 import { getSafeCameraTarget } from '../prototype/prototypeConfig';
 import type { CameraPreset } from '../prototype/types';
 
@@ -17,12 +17,14 @@ export function CameraRig({ panelOpen, preset, resetToken }: { readonly panelOpe
   const cameraUpOnGround = useRef(new Vector3());
   const panOrigin = useRef<{ x: number; y: number } | null>(null);
   const panStartTarget = useRef(new Vector3());
+  const panClampOrigin = useRef(new Vector3());
 
   useEffect(() => {
     const safeTarget = getSafeCameraTarget(getCameraPresetTarget(preset), size.width, size.height, panelOpen);
     const range = getCameraZoomRange(size.width, panelOpen);
     target.current.set(...safeTarget);
     destination.current.set(...safeTarget);
+    panClampOrigin.current.set(...safeTarget);
     desiredZoom.current = preset === 'overview' ? range.overview : range.focus;
   }, [panelOpen, preset, resetToken, size.height, size.width]);
 
@@ -60,13 +62,21 @@ export function CameraRig({ panelOpen, preset, resetToken }: { readonly panelOpe
       cameraUpOnGround.current.setFromMatrixColumn(camera.matrixWorld, 1).setY(0).normalize();
       const totalX = event.clientX - (panOrigin.current?.x ?? previous.x);
       const totalY = event.clientY - (panOrigin.current?.y ?? previous.y);
-      const horizontalGesture = Math.abs(totalX) > Math.abs(totalY) * 1.35;
-      const verticalGesture = Math.abs(totalY) > Math.abs(totalX) * 1.35;
       const [panX, panZ] = mapScreenDragWithBasis(
-        verticalGesture ? 0 : totalX, horizontalGesture ? 0 : totalY, scale,
+        totalX, totalY, scale,
         [cameraRight.current.x, cameraRight.current.z], [cameraUpOnGround.current.x, cameraUpOnGround.current.z],
       );
-      const [clampedX, clampedZ] = clampCameraTarget([panStartTarget.current.x + panX, panStartTarget.current.z + panZ]);
+      const basis = {
+        right: [cameraRight.current.x, cameraRight.current.z] as const,
+        up: [cameraUpOnGround.current.x, cameraUpOnGround.current.z] as const,
+      };
+      const limits = getCameraPanLimits(size.width, size.height, zoom, panelOpen, basis);
+      const [clampedX, clampedZ] = clampCameraTargetInScreenSpace(
+        [panStartTarget.current.x + panX, panStartTarget.current.z + panZ],
+        [panClampOrigin.current.x, panClampOrigin.current.z],
+        basis,
+        limits,
+      );
       destination.current.x = clampedX;
       destination.current.z = clampedZ;
     };
@@ -94,7 +104,7 @@ export function CameraRig({ panelOpen, preset, resetToken }: { readonly panelOpe
       element.removeEventListener('lostpointercapture', onPointerUp);
       element.removeEventListener('wheel', onWheel);
     };
-  }, [camera, gl, panelOpen, size.width]);
+  }, [camera, gl, panelOpen, size.height, size.width]);
 
   /* eslint-disable react-hooks/immutability -- R3F camera transforms are intentionally imperative inside the render loop. */
   useFrame(() => {
