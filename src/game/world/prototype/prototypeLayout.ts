@@ -28,10 +28,10 @@ export interface PrototypeRoadEdge {
 }
 
 const facilities: readonly PrototypeFacilityPlacement[] = [
-  { id: 'solar', primaryAssetId: 'solar-panel', position: [-6.5, 3.5], rotationY: Math.PI, footprintOverride: { width: 5, depth: 3 } },
+  { id: 'solar', primaryAssetId: 'solar-panel', position: [-6.5, 3.5], rotationY: Math.PI },
   { id: 'reactor', primaryAssetId: 'reactor-body', position: [-4, -3.6], rotationY: 0 },
   { id: 'battery', primaryAssetId: 'battery-body', position: [-1, 3.6], rotationY: Math.PI },
-  { id: 'habitat', primaryAssetId: 'habitat', position: [1.5, -3.6], rotationY: 0, footprintOverride: { width: 6.6, depth: 4.2 } },
+  { id: 'habitat', primaryAssetId: 'habitat', position: [1.5, -3.6], rotationY: 0 },
   { id: 'oxygen', primaryAssetId: 'oxygen', position: [4.5, 3.6], rotationY: Math.PI },
   { id: 'mine', primaryAssetId: 'mine-drill', position: [7, -3.8], rotationY: 0 },
   { id: 'expansion', primaryAssetId: 'expansion-pad', position: [9.5, 4.3], rotationY: Math.PI },

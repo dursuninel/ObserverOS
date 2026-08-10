@@ -674,7 +674,7 @@ FAZ 3 TEST 4 KULLANICI İNCELEMESİ İÇİN HAZIR
 
 ## Faz 3 — Test 5 / Idle Presentation Cleanup + Object Forensics + Turkish DEV UI
 
-**Durum:** Kullanıcı incelemesine hazır
+**Durum:** TAMAMLANDI — KULLANICI ONAYLI
 **Tarih:** 10 Ağustos 2026
 **Branch:** `phase-3-workforce-maintenance`
 
@@ -699,3 +699,126 @@ FAZ 3 TEST 4 KULLANICI İNCELEMESİ İÇİN HAZIR
 - Yeni dependency eklenmedi; Faz 4 kapsamına girilmedi; commit veya push yapılmadı.
 
 FAZ 3 TEST 5 KULLANICI İNCELEMESİ İÇİN HAZIR
+
+### Faz 3 kapanış kaydı
+
+- Faz 3 kullanıcı tarafından onaylandı ve kapanmıştır.
+- Bilinen teknik borç: nadir authoritative travel görselinde ani kaybolma görülebilir. Faz 4 kapsamında düzeltilmeyecek; yalnız yeni layout entegrasyonu bunu kötüleştirirse regresyon sayılacaktır.
+- Sonraki çalışma yalnız Faz 4 — Deterministic Layout Generator kapsamındadır.
+
+---
+
+## Faz 4 — Test 1 / Deterministic Layout Generator + Visual Candidate Review
+
+**Durum:** KULLANICI GÖRSEL ADAY SEÇİMİNE HAZIR — NİHAİ LAYOUT DONDURULMADI
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-4-deterministic-layout`
+
+### 1. GENERATOR MİMARİSİ
+
+- `Planet intent → terrain → bounded candidate generation → hard validation → soft scoring → top 5 → actual R3F DEV preview` hattı kuruldu.
+- Bir seed için 30 internal aday üretilir; en fazla 5 valid aday score ve explicit candidate ID tie-break ile sıralanır. Infinite retry yoktur.
+- Player production sınırında generator ve seed sweep çalıştırılmaz. Nihai kullanıcı seçimi sonrasında frozen content layout okunması için Zod/fail-fast sınırı hazırdır; bu turda dosya dondurulmadı.
+
+### 2. SPATIAL DESIGN CONTRACT
+
+- H/M/L/A adjacency niyeti, Compact/Linear/Distributed profilleri ve facility-specific spatial preferences declarative tutulur.
+- Geometrik asset truth ikinci config'e kopyalanmaz; footprint, entrance ve work point AssetRegistry'den gelir.
+
+### 3. PLANET INTENT
+
+- NIVALIS prototype intenti Compact, bağlı koloni, Habitat/Life Support core, dış industrial Mine, ayrık fakat bağlı Reactor, açık alanda Solar ve periferik erişilebilir Expansion olarak tanımlandı.
+- Yeni facility, resource veya gameplay mekaniği eklenmedi.
+
+### 4. TERRAIN
+
+- `buildable`, `blocked`, `resourceZone`, `hazardZone`, `preferredExpansionArea` tagleri ile Energy, Industrial, Residential, LifeSupport ve Emergency operational zone sözleşmeleri desteklenir.
+- Mine resource zone hard requirement; blocked/hazard ihlalleri hard reject'tir.
+
+### 5. PLACEMENT PROFILES
+
+- Preferred/required/forbidden zone/tag, preferred/avoided neighbour, minimum separation, access points, road, road-facing orientation, expansion compatibility ve service clearance semantikleri tanımlandı.
+- Habitat ve Solar composite runtime footprintleri AssetRegistry tek kaynağına taşındı; eski prototype override kopyaları kaldırıldı.
+
+### 6. DETERMINISTIC RNG
+
+- FNV-1a seed hash + deterministic Mulberry-benzeri PRNG kullanılır; `Math.random` kullanılmaz.
+- Seed, generator version, style ve internal candidate index aynıysa semantic output ve candidate sırası birebir aynıdır.
+
+### 7. HARD CONSTRAINTS
+
+- Required facility, buildable containment, footprint/separation, required/forbidden terrain, entrance, work/service clearance, road/navigation connectivity, expansion capacity ve projected full-obscuration doğrulanır.
+- Bilerek impossible 3×3 terrain dört bounded deneme sonunda structured failure döndürür.
+
+### 8. SOFT SCORING
+
+- Adjacency, safety separation, compactness, road quality, visual composition, expansion access, camera readability, screen-space overlap ve terrain usage ayrı breakdown olarak tutulur.
+- Score aday önerisidir; insan görsel seçiminin yerine geçmez.
+
+### 9. SCREEN-SPACE VALIDATION
+
+- Three/Canvas gerektirmeyen fixed-camera pure projection ve projected overlap ratio eklendi.
+- Büyük ölçüde/tam obscured mandatory facility hard reject, kısmi overlap soft penalty'dir.
+
+### 10. ROAD HIERARCHY
+
+- Facility center yerine AssetRegistry entrance'larına bağlanan main spine, kısa service branch ve entrance-link hiyerarşisi üretildi.
+- Terrain-aware deterministic A* blocked terrain ve diğer facility footprintlerinden kaçınır; gereksiz zig-zag road score'u düşürür.
+
+### 11. NAVIGATION
+
+- Görünür yollar ve navigation aynı node/edge spatial source'tan üretilir. Stable `spine-*`, `*-approach`, `*-entrance` ID'leri Faz 3 route presentation ile uyumludur.
+- Generated layout'u authoritative `TravelNetworkConfig` sınırına dönüştüren adapter eklendi.
+
+### 12. STREET LIGHT PLACEMENT
+
+- Lambalar ayrı magic coordinate dizisi değildir; junction, Habitat/Mine/Reactor approach ve uzun spine segmentlerindeki deterministic intermediate anchor'lardan türetilir.
+- Duplicate/spam prevention ile mevcut gündüz/gece intensity ve kalite profili bütçeleri korundu.
+
+### 13. EXPANSION SLOTS
+
+- Expansion anchor, orientation, 5×5 footprint capacity, compatibility ve generated access node relation taşır.
+- Construction veya player placement gameplay'i uygulanmadı.
+
+### 14. SERIALIZATION
+
+- `GeneratedPlanetLayout` plain JSON; Vector3/Object3D/ref/function/Map/Set truth taşımaz.
+- JSON stringify/parse → Zod validate → semantic equality PASS; invalid frozen layout fail-fast PASS.
+
+### 15. NIVALIS TOP CANDIDATES
+
+- ADAY A — seed `41001`, score `87.95`: en yüksek toplam denge; merkez güney Habitat, doğu Life Support, batı Energy, dış doğu Mine ve periferik Expansion okunaklı.
+- ADAY B — seed `41001`, score `87.93`: adjacency `7.0`, composition `9.9`; core ilişkisi A'ya göre biraz daha sıkı.
+- ADAY C — seed `41001`, score `87.87`: composition `9.9`, expansion `9.5`; dengeli core ve açık outer ring.
+- ADAY D — seed `41001`, score `87.87`: adjacency `7.2`, expansion `9.7`; Expansion erişimi top 5 içindeki en güçlü varyant.
+- ADAY E — seed `41001`, score `87.85`: adjacency `7.4`, composition `9.7`; top 5 içindeki en güçlü yakınlık skoru.
+- Hiçbiri final seçilmedi veya `planet.layout.json` olarak dondurulmadı.
+
+### 16. DEV VISUAL REVIEW
+
+- `/colony` üzerinde Türkçe `YERLEŞİM ADAYLARI` paneli, A–E tabs, önceki/sonraki, yeni tohum, breakdown ve connected/valid durumları eklendi.
+- Actual browser'da A–E tek tek canlı R3F renderer'da gösterildi; 41001→41002 yeni tohum kontrolü, camera reset ve console doğrulaması PASS.
+- DEV overlay facility footprint/service clearance, entrance/work point, road node/edge, terrain zone, expansion slot ve camera bounds gösterir. Son görsel seçim kullanıcıya aittir.
+
+### 17. SEED SWEEP
+
+- 100 seed test edildi: geçerli `100`, başarısız `0`, ortalama top aday `5`, en yüksek puan `88.82`, en düşük puan `87.56`.
+- Browser DEV raporunda ortalama üretim süresi `6.86 ms/seed` ölçüldü; bu performans ölçümü makine/oturuma bağlıdır.
+
+### 18. REGRESSION
+
+- Faz 3 workforce, maintenance, authoritative travel, continuous motion, pause/×1/×2/×4, snow/fog/day-night, street lights, camera/safe viewport ve object inspector testleri PASS kaldı.
+- `PROTOTYPE_LAYOUT` production spatial truth olmaktan çıkarıldı; reference/test fixture ve migration helper olarak korundu.
+- Bilinen nadir authoritative travel görsel ani kaybolma borcu bu fazda değiştirilmedi. Candidate DEV hot-swap stable route ID topology kullanır; production hot-swap sistemi yapılmadı.
+
+### 19. TEST RESULTS
+
+- `npm run lint`: PASS — 0 hata, 0 uyarı.
+- `npm run typecheck`: PASS.
+- `npx tsc -p tsconfig.simulation.json --pretty false`: PASS.
+- `npm test`: PASS — 25 dosya, 221 test; 45 generator + 3 layout localization testi dahil.
+- `npm run build`: PASS — 378 module; yalnız mevcut 500 kB üzeri chunk uyarısı sürüyor.
+- Browser: A–E switch, seed sweep, overlay, yeni seed ve console error/warning kontrolü PASS.
+- Yeni dependency eklenmedi. Faz 5'e geçilmedi.
+
+FAZ 4 TEST 1 — GÖRSEL ADAY SEÇİMİ İÇİN HAZIR

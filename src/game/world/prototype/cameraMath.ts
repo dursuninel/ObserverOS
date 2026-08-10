@@ -1,4 +1,6 @@
 import type { CameraPreset } from './types';
+import type { CameraBounds, GeneratedPlanetLayout } from '../layout/layoutTypes';
+import { getGeneratedFacility } from '../layout/layoutQueries';
 import { getFacilityPlacement, getPrototypeWorldBounds, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
 
 export interface CameraGroundBasis {
@@ -54,8 +56,8 @@ export function mapScreenDragWithBasis(deltaX: number, deltaY: number, scale: nu
   return panScalarsToWorldOffset(mapScreenDragToPanScalars(deltaX, deltaY, scale), { right: cameraRight, up: cameraUpOnGround });
 }
 
-const projectedHalfExtent = (axis: Point2): number => {
-  const world = getPrototypeWorldBounds();
+const projectedHalfExtent = (axis: Point2, cameraBounds?: CameraBounds): number => {
+  const world = cameraBounds ?? getPrototypeWorldBounds();
   const centerX = (world.minX + world.maxX) / 2;
   const centerZ = (world.minZ + world.maxZ) / 2;
   const corners: readonly Point2[] = [
@@ -71,14 +73,15 @@ export function getCameraPanLimits(
   zoom: number,
   panelOpen: boolean,
   basis: CameraGroundBasis = getCameraGroundBasis(),
+  cameraBounds?: CameraBounds,
 ): CameraPanLimits {
   const mobile = viewportWidth <= 720;
   const safeWidth = Math.max(1, viewportWidth - (!mobile && panelOpen ? 360 : 0));
   const safeHeight = Math.max(1, viewportHeight * (mobile && panelOpen ? 0.62 : 1));
   const visibleRightHalf = safeWidth / (2 * Math.max(zoom, 1));
   const visibleUpHalf = safeHeight / (2 * Math.max(zoom, 1));
-  const rightExtent = projectedHalfExtent(basis.right);
-  const upExtent = projectedHalfExtent(basis.up);
+  const rightExtent = projectedHalfExtent(basis.right, cameraBounds);
+  const upExtent = projectedHalfExtent(basis.up, cameraBounds);
   const overviewZoom = getCameraZoomRange(viewportWidth, panelOpen).overview;
   const zoomSensitiveCapRatio = Math.min(0.42, Math.max(0.22, 0.3 * zoom / overviewZoom));
   const limitFor = (extent: number, visibleHalf: number) => Math.min(
@@ -120,8 +123,8 @@ export function clampCameraZoom(zoom: number, range: CameraZoomRange): number {
   return Math.min(range.max, Math.max(range.min, zoom));
 }
 
-export function getCameraPresetTarget(preset: CameraPreset): readonly [number, number, number] {
-  if (preset === 'overview') return [PROTOTYPE_LAYOUT.camera.center[0], 0, PROTOTYPE_LAYOUT.camera.center[1]];
-  const placement = getFacilityPlacement(preset);
+export function getCameraPresetTarget(preset: CameraPreset, layout?: GeneratedPlanetLayout): readonly [number, number, number] {
+  if (preset === 'overview') return layout ? [layout.cameraBounds.center[0], 0, layout.cameraBounds.center[1]] : [PROTOTYPE_LAYOUT.camera.center[0], 0, PROTOTYPE_LAYOUT.camera.center[1]];
+  const placement = layout ? getGeneratedFacility(layout, preset) : getFacilityPlacement(preset);
   return [placement.position[0], 0, placement.position[1]];
 }

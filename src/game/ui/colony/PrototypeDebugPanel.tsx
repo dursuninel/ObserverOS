@@ -3,18 +3,26 @@ import { useTranslation } from 'react-i18next';
 import type { PrototypeDebugState, WorldMetrics } from '../../world/prototype/types';
 import type { RuntimeObjectInspection } from '../../world/renderer/runtimeObjectInspector';
 import { SimulationDiagnostic } from './SimulationDiagnostic';
+import type { GeneratedPlanetLayout } from '../../world/layout/layoutTypes';
+import type { SeedSweepReport } from '../../world/layout/layoutGenerator';
+import { LayoutCandidatePanel } from './LayoutCandidatePanel';
 
 interface PrototypeDebugPanelProps {
+  readonly candidates: readonly GeneratedPlanetLayout[];
   readonly inspection: RuntimeObjectInspection | null;
   readonly metrics: WorldMetrics;
   readonly onChange: (state: PrototypeDebugState) => void;
   readonly onCameraPreset: (preset: PrototypeDebugState['cameraPreset']) => void;
   readonly onToggle: () => void;
+  readonly onNewLayoutSeed: () => void;
+  readonly onSelectCandidate: (index: number) => void;
   readonly open: boolean;
   readonly state: PrototypeDebugState;
+  readonly seedSweep: SeedSweepReport;
+  readonly selectedCandidateIndex: number;
 }
 
-export function PrototypeDebugPanel({ inspection, metrics, onCameraPreset, onChange, onToggle, open, state }: PrototypeDebugPanelProps) {
+export function PrototypeDebugPanel({ candidates, inspection, metrics, onCameraPreset, onChange, onNewLayoutSeed, onSelectCandidate, onToggle, open, seedSweep, selectedCandidateIndex, state }: PrototypeDebugPanelProps) {
   const { t } = useTranslation();
   const set = <Key extends keyof PrototypeDebugState>(key: Key, value: PrototypeDebugState[Key]) => onChange({ ...state, [key]: value });
   return (
@@ -22,6 +30,7 @@ export function PrototypeDebugPanel({ inspection, metrics, onCameraPreset, onCha
       <button aria-expanded={open} className="debug-panel-toggle" onClick={onToggle} type="button">{open ? t('prototype.debug.hide') : t('prototype.debug.show')}</button>
       {open && <>
       <div className="debug-panel-heading"><span>{t('prototype.debug.title')}</span><span className="prototype-badge">{t('prototype.debug.badge')}</span></div>
+      {import.meta.env.DEV && <LayoutCandidatePanel candidates={candidates} onNewSeed={onNewLayoutSeed} onSelect={onSelectCandidate} seedSweep={seedSweep} selectedIndex={selectedCandidateIndex} />}
       <label>{t('prototype.debug.time')}<input max="1" min="0" onChange={(event) => set('timeOfDay', Number(event.target.value))} step="0.01" type="range" value={state.timeOfDay} /></label>
       <div className="debug-toggle-row">
         <label><input checked={state.snowEnabled} onChange={(event) => set('snowEnabled', event.target.checked)} type="checkbox" />{t('prototype.debug.snow')}</label>
@@ -31,6 +40,7 @@ export function PrototypeDebugPanel({ inspection, metrics, onCameraPreset, onCha
       <button className="camera-reset-button" onClick={() => onCameraPreset('overview')} type="button">{t('prototype.camera.reset')}</button>
       <label>{t('prototype.debug.quality')}<select onChange={(event) => set('quality', event.target.value as PrototypeDebugState['quality'])} value={state.quality}><option value="low">{t('prototype.quality.low')}</option><option value="medium">{t('prototype.quality.medium')}</option><option value="high">{t('prototype.quality.high')}</option></select></label>
       <label className="debug-safe-area"><input checked={state.safeAreasVisible} onChange={(event) => set('safeAreasVisible', event.target.checked)} type="checkbox" />{t('prototype.debug.safeAreas')}</label>
+      {import.meta.env.DEV && <label className="debug-safe-area"><input checked={state.layoutOverlayVisible} onChange={(event) => set('layoutOverlayVisible', event.target.checked)} type="checkbox" />{t('layoutReview.overlay')}</label>}
       {import.meta.env.DEV && <label className="debug-safe-area"><input checked={state.objectInspectorEnabled} onChange={(event) => set('objectInspectorEnabled', event.target.checked)} type="checkbox" />{t('prototype.inspector.toggle')}</label>}
       {import.meta.env.DEV && state.objectInspectorEnabled && <div className="object-inspector" data-testid="object-inspector">
         <strong>{t('prototype.inspector.title')}</strong>
