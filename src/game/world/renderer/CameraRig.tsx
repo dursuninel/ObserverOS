@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MathUtils, OrthographicCamera, Vector3 } from 'three';
 
-import { CAMERA_OFFSET, clampCameraTargetInScreenSpace, clampCameraZoom, getCameraPanLimits, getCameraPresetTarget, getCameraZoomRange, mapScreenDragWithBasis } from '../prototype/cameraMath';
+import { CAMERA_OFFSET, clampCameraTargetInScreenSpace, clampCameraZoom, getCameraPanLimits, getCameraPresetTarget, getCameraZoomRange, getLayoutOverviewZoom, mapScreenDragWithBasis } from '../prototype/cameraMath';
 import { getSafeCameraTarget } from '../prototype/prototypeConfig';
 import type { CameraPreset } from '../prototype/types';
 import type { GeneratedPlanetLayout } from '../layout/layoutTypes';
@@ -26,7 +26,7 @@ export function CameraRig({ layout, panelOpen, preset, resetToken }: { readonly 
     target.current.set(...safeTarget);
     destination.current.set(...safeTarget);
     panClampOrigin.current.set(...safeTarget);
-    desiredZoom.current = preset === 'overview' ? range.overview : range.focus;
+    desiredZoom.current = preset === 'overview' ? getLayoutOverviewZoom(size.width, size.height, panelOpen, layout.cameraBounds) : range.focus;
   }, [layout, panelOpen, preset, resetToken, size.height, size.width]);
 
   useEffect(() => {

@@ -17,8 +17,8 @@ export function LayoutDebugOverlay({ layout }: { readonly layout: GeneratedPlane
   return <group renderOrder={1000}>
     {layout.zones.map((zone) => <mesh key={zone.id} position={[zone.center[0], 0.08, zone.center[1]]} rotation-x={-Math.PI / 2}><planeGeometry args={[zone.width, zone.depth]} /><meshBasicMaterial color={zone.tags.includes('blocked') ? '#f05d5d' : zone.tags.includes('resourceZone') ? '#d7ad54' : zone.tags.includes('preferredExpansionArea') ? '#9b75e8' : '#4ba89a'} depthWrite={false} opacity={0.055} transparent /></mesh>)}
     {layout.facilities.map((facility) => <group key={facility.id}>
-      <RectOutline center={facility.position} color="#72e2d0" depth={facility.footprint.depth} width={facility.footprint.width} />
-      <RectOutline center={facility.position} color="#e7bd65" depth={facility.footprint.depth + facility.serviceClearance * 2} width={facility.footprint.width + facility.serviceClearance * 2} y={0.145} />
+      <RectOutline center={facility.position} color="#72e2d0" depth={facility.visualFootprint.depth} width={facility.visualFootprint.width} />
+      <RectOutline center={facility.position} color="#e7bd65" depth={facility.visualFootprint.depth + facility.serviceClearance * 2} width={facility.visualFootprint.width + facility.serviceClearance * 2} y={0.145} />
       <mesh position={[facility.entrance[0], 0.25, facility.entrance[1]]}><sphereGeometry args={[0.13, 8, 8]} /><meshBasicMaterial color="#66e59a" depthTest={false} /></mesh>
       <mesh position={[facility.workPoint[0], 0.25, facility.workPoint[1]]}><sphereGeometry args={[0.12, 8, 8]} /><meshBasicMaterial color="#ff9e64" depthTest={false} /></mesh>
     </group>)}

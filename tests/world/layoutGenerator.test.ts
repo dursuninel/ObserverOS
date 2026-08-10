@@ -48,7 +48,8 @@ describe('Faz 4 deterministic layout generator', () => {
   it('7. forbidden terrain ihlalini reject eder', () => {
     const invalid = copy();
     const reactor = invalid.facilities.find(({ id }) => id === 'reactor')!;
-    Object.assign(reactor, { position: [15, -7.8], footprint: { ...reactor.footprint, center: [15, -7.8] } });
+    const hazard = NIVALIS_TERRAIN.areas.find(({ tags }) => tags.includes('hazardZone'))!;
+    Object.assign(reactor, { position: hazard.center, footprint: { ...reactor.footprint, center: hazard.center }, visualFootprint: { ...reactor.visualFootprint, center: hazard.center } });
     expect(validateGeneratedLayout(invalid, NIVALIS_TERRAIN).reasons).toContain('forbidden-terrain:reactor');
   });
 
@@ -56,7 +57,7 @@ describe('Faz 4 deterministic layout generator', () => {
     const invalid = copy();
     const oxygen = invalid.facilities.find(({ id }) => id === 'oxygen')!;
     const habitat = invalid.facilities.find(({ id }) => id === 'habitat')!;
-    Object.assign(oxygen.footprint, { center: habitat.position });
+    Object.assign(oxygen.visualFootprint, { center: habitat.position });
     expect(validateGeneratedLayout(invalid, NIVALIS_TERRAIN).reasons.some((reason) => reason.startsWith('facility-overlap'))).toBe(true);
   });
 
@@ -64,7 +65,7 @@ describe('Faz 4 deterministic layout generator', () => {
 
   it('10. work ve service clearance taşır', () => layout.facilities.forEach((item) => { expect(item.serviceClearance).toBeGreaterThan(0); expect(item.workPoint).toHaveLength(2); }));
 
-  it('11. Habitat/Oxygen yakınlığı score üretir', () => expect(scoreGeneratedLayout(layout).adjacency).toBeGreaterThan(0));
+  it('11. Habitat/Oxygen yakınlığı scoring contract içinde değerlendirilir', () => expect(NIVALIS_PLACEMENT_PROFILES.habitat.preferredNeighbours).toContainEqual({ facilityId: 'oxygen', maxDistance: 9, weight: 1 }));
 
   it('12. Habitat/Mine ayrımı korunur', () => expect(distance(facility(layout, 'habitat')!.position, facility(layout, 'mine')!.position)).toBeGreaterThan(7));
 

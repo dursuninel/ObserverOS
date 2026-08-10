@@ -62,6 +62,22 @@ function interpolate(points: readonly Point2[], progress: number, laneOffset: nu
   return { activity: false, animation: 'Walk', position: toWorld(points.at(-1) ?? [0, 0]), rotationY: 0, visible: true };
 }
 
+function generatedRoutePolyline(layout: GeneratedPlanetLayout, routeNodeIds: readonly string[]): readonly Point2[] {
+  const points: Point2[] = [];
+  for (let index = 0; index < routeNodeIds.length - 1; index += 1) {
+    const from = routeNodeIds[index];
+    const to = routeNodeIds[index + 1];
+    const edge = layout.navigationEdges.find((candidate) => candidate.from === from && candidate.to === to || candidate.from === to && candidate.to === from);
+    const road = edge ? layout.roads.find((candidate) => candidate.edgeId === edge.id) : undefined;
+    const segment = road ? edge?.from === from ? road.points : [...road.points].reverse() : from ? [getGeneratedRoadNode(layout, from).position, to ? getGeneratedRoadNode(layout, to).position : getGeneratedRoadNode(layout, from).position] : [];
+    segment.forEach((point) => {
+      const previous = points.at(-1);
+      if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) points.push(point);
+    });
+  }
+  return points;
+}
+
 function habitatPose(colonist: ColonistState, layout?: GeneratedPlanetLayout): AuthoritativeColonistPose {
   const index = stableIndex(colonist.id);
   const placement = layout ? getGeneratedFacility(layout, 'habitat') : getFacilityPlacement('habitat');
@@ -77,7 +93,7 @@ export function getAuthoritativeColonistPose(colonist: ColonistState, layout?: G
   if (travel !== null) {
     const source = sourcePoint(travel.sourceLocationId, index, layout);
     const target = layoutFacility(travel.targetLocationId);
-    const road = travel.routeNodeIds.map((nodeId) => layout ? getGeneratedRoadNode(layout, nodeId).position : getRoadNode(nodeId).position);
+    const road = layout ? generatedRoutePolyline(layout, travel.routeNodeIds) : travel.routeNodeIds.map((nodeId) => getRoadNode(nodeId).position);
     const habitat = getHabitatPresentationPoints(layout ? getGeneratedFacility(layout, 'habitat') : undefined);
     const destination = travel.targetLocationId === 'habitat'
       ? habitat.restPoints[index % habitat.restPoints.length] ?? (layout ? getGeneratedRoadNode(layout, 'habitat-entrance').position : getRoadNode('habitat-entrance').position)

@@ -115,8 +115,20 @@ export function clampCameraTargetInScreenSpace(
 }
 
 export function getCameraZoomRange(viewportWidth: number, panelOpen: boolean): CameraZoomRange {
-  if (viewportWidth <= 720) return { min: 20, max: 68, overview: 24, focus: 54 };
-  return { min: 28, max: 72, overview: panelOpen ? 40 : 46, focus: 56 };
+  if (viewportWidth <= 720) return { min: 14, max: 68, overview: 24, focus: 54 };
+  return { min: 16, max: 72, overview: panelOpen ? 40 : 46, focus: 56 };
+}
+
+export function getLayoutOverviewZoom(viewportWidth: number, viewportHeight: number, panelOpen: boolean, bounds: CameraBounds): number {
+  const mobile = viewportWidth <= 720;
+  const safeWidth = Math.max(1, viewportWidth - (!mobile && panelOpen ? 380 : 0));
+  const safeHeight = Math.max(1, viewportHeight * (mobile && panelOpen ? 0.62 : 1));
+  const basis = getCameraGroundBasis();
+  const groundVerticalScale = CAMERA_OFFSET[1] / Math.hypot(...CAMERA_OFFSET);
+  const projectedRight = projectedHalfExtent(basis.right, bounds) + 1.4;
+  const projectedUp = projectedHalfExtent(basis.up, bounds) * groundVerticalScale + 3.2;
+  const fitZoom = Math.min(safeWidth / (2 * projectedRight), safeHeight / (2 * projectedUp)) * 0.92;
+  return clampCameraZoom(fitZoom, getCameraZoomRange(viewportWidth, panelOpen));
 }
 
 export function clampCameraZoom(zoom: number, range: CameraZoomRange): number {
