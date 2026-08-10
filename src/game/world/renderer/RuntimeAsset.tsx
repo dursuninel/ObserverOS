@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
 import { AnimationMixer } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -6,6 +6,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 import type { AssetDefinition } from '../assets/AssetRegistry';
 import { normalizeAssetMaterials } from './assetMaterialNormalization';
+import { CharacterAnimationController } from './CharacterAnimationController';
 import { usePresentationClock } from './presentationTimeContext';
 
 interface RuntimeAssetProps {
@@ -27,28 +28,33 @@ export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY
     normalizeAssetMaterials(instance, asset);
     return instance;
   }, [asset, gltf.scene]);
-  const mixer = useMemo(() => animation ? new AnimationMixer(object) : null, [animation, object]);
-  const currentAction = useRef<string | null>(null);
+  const runtimeClip = animation === undefined ? null : gltf.animations.find((candidate) => candidate.name === animation);
+  if (animation !== undefined && runtimeClip === undefined) throw new Error(`Animation "${animation}" is missing from runtime asset "${asset.id}".`);
+  const mixer = useMemo(() => asset.animationClips === undefined ? null : new AnimationMixer(object), [asset.animationClips, object]);
+  const animationController = useMemo(
+    () => mixer === null ? null : new CharacterAnimationController(mixer, gltf.animations, object),
+    [gltf.animations, mixer, object],
+  );
+  const presentationRoot = useRef<import('three').Group>(null);
 
-  useEffect(() => {
-    if (!mixer || !animation || currentAction.current === animation) return;
-    mixer.stopAllAction();
-    const clip = gltf.animations.find((candidate) => candidate.name === animation);
-    if (!clip) throw new Error(`Animation "${animation}" is missing from runtime asset "${asset.id}".`);
-    mixer.clipAction(clip).reset().fadeIn(0.18).play();
-    currentAction.current = animation;
-  }, [animation, asset.id, gltf.animations, mixer]);
+  useLayoutEffect(() => {
+    if (animationController !== null && animation !== undefined) animationController.activate(animation);
+    if (presentationRoot.current !== null) presentationRoot.current.visible = true;
+  }, [animation, animationController]);
 
-  useEffect(() => () => { mixer?.stopAllAction(); }, [mixer]);
-  useFrame(() => mixer?.update(presentationClock.getDeltaSeconds()));
+  useEffect(() => () => animationController?.dispose(), [animationController]);
+  useFrame(() => animationController?.update(presentationClock.getDeltaSeconds()));
 
   const offset = asset.transform?.offset;
   return (
-    <primitive
-      object={object}
+    <group
       position={[position[0] + (offset?.x ?? 0), position[1] + (offset?.y ?? 0), position[2] + (offset?.z ?? 0)]}
+      ref={presentationRoot}
       rotation={[0, rotationY + (asset.transform?.rotationY ?? 0), 0]}
       scale={(asset.transform?.scale ?? 1) * scaleMultiplier}
-    />
+      visible={asset.animationClips === undefined}
+    >
+      <primitive object={object} />
+    </group>
   );
 }

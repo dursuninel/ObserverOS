@@ -1,6 +1,6 @@
-import { Suspense, useMemo, useRef } from 'react';
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { BufferAttribute, MathUtils, Mesh, PointLight, Shape } from 'three';
+import { BufferAttribute, Mesh, PointLight, Shape } from 'three';
 
 import { useSimulationSnapshot } from '../../../app/providers/simulationContext';
 import type { ColonistState } from '../../domain/workforce/Workforce';
@@ -13,6 +13,7 @@ import { getFacilityVisualSignature, getLampIntensity, isNight, QUALITY_PROFILES
 import { getFacilityPlacement, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT } from '../prototype/prototypeLayout';
 import type { FacilityId, PrototypeDebugState, WorldMetrics } from '../prototype/types';
 import { getFacilityActivityScale, getHazePosition, isMaintenanceActivityPulse } from '../presentation/PresentationClock';
+import { ColonistMotionInterpolator, interpolateFacing } from '../presentation/ColonistMotionInterpolator';
 import { CameraRig } from './CameraRig';
 import { PresentationTimeDriver, PresentationTimeProvider } from './PresentationTime';
 import { usePresentationClock } from './presentationTimeContext';
@@ -132,24 +133,34 @@ function LocalFrozenHaze() {
   return <group ref={mist}>{PROTOTYPE_LAYOUT.hazeAnchors.map(([x, z], index) => <mesh key={index} position={[x, 0.12 + index % 2 * 0.03, z]} rotation-x={-Math.PI / 2} scale={[1.8 + index % 3 * 0.35, 1.1, 1]}><circleGeometry args={[2.4, 14]} /><meshBasicMaterial color="#d4e2e5" depthWrite={false} opacity={0.035} transparent /></mesh>)}</group>;
 }
 
-function Colonist({ colonist }: { readonly colonist: ColonistState }) {
+function Colonist({ colonist, fixedStepPresentationSeconds }: { readonly colonist: ColonistState; readonly fixedStepPresentationSeconds: number }) {
   const group = useRef<import('three').Group>(null);
   const presentationClock = usePresentationClock();
-  const pose = getAuthoritativeColonistPose(colonist);
+  const [motion] = useState(() => new ColonistMotionInterpolator(colonist));
+  useLayoutEffect(() => motion.observe(colonist), [colonist, motion]);
+  const initialPose = getAuthoritativeColonistPose(motion.sample());
+  const [animation, setAnimation] = useState(initialPose.animation);
+  const [activity, setActivity] = useState(initialPose.activity);
+  const activityRef = useRef(activity);
+  const animationRef = useRef(animation);
   const index = Number.parseInt(colonist.id.split('-').at(-1) ?? '1', 10) - 1;
   useFrame(() => {
     const deltaSeconds = presentationClock.getDeltaSeconds();
-    if (deltaSeconds === 0) return;
     if (!group.current) return;
+    const pose = getAuthoritativeColonistPose(motion.advance(deltaSeconds, fixedStepPresentationSeconds));
     group.current.visible = pose.visible;
-    const positionAlpha = 1 - Math.pow(0.78, deltaSeconds * 60);
-    group.current.position.x = MathUtils.lerp(group.current.position.x, pose.position[0], positionAlpha);
-    group.current.position.y = MathUtils.lerp(group.current.position.y, pose.position[1], positionAlpha);
-    group.current.position.z = MathUtils.lerp(group.current.position.z, pose.position[2], positionAlpha);
-    const rotationAlpha = 1 - Math.pow(0.86, deltaSeconds * 60);
-    group.current.rotation.y = MathUtils.lerp(group.current.rotation.y, pose.rotationY, rotationAlpha);
+    group.current.position.set(...pose.position);
+    group.current.rotation.y = interpolateFacing(group.current.rotation.y, pose.rotationY, deltaSeconds);
+    if (animationRef.current !== pose.animation) {
+      animationRef.current = pose.animation;
+      setAnimation(pose.animation);
+    }
+    if (activityRef.current !== pose.activity) {
+      activityRef.current = pose.activity;
+      setActivity(pose.activity);
+    }
   });
-  return <group ref={group} position={pose.position} rotation-y={pose.rotationY} scale={0.92} visible={pose.visible}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={pose.animation} />{pose.activity && <MaintenanceActivity />}</group>;
+  return <group ref={group} position={initialPose.position} rotation-y={initialPose.rotationY} scale={0.92} visible={initialPose.visible}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={animation} />{activity && <MaintenanceActivity />}</group>;
 }
 
 function MaintenanceActivity() {
@@ -207,7 +218,7 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics,
         {PROTOTYPE_LAYOUT.zones.coreCrates.map(([x, z, rotation], index) => <RuntimeAsset key={`crate-${index}`} asset={requirePrototypeAsset('supply-crate')} position={[x, 0.14, z]} rotationY={rotation} />)}
         {roadTiles.filter((_, index) => index % 3 === 0).map(({ position: [x, z] }, index) => <RuntimeAsset key={`floor-${index}`} asset={requirePrototypeAsset('floor-light')} position={[x, 0.16, z]} />)}
         <StreetLights debugState={debugState} />
-        {simulationSnapshot.colonists.map((colonist) => <Colonist colonist={colonist} key={colonist.id} />)}
+        {simulationSnapshot.colonists.map((colonist) => <Colonist colonist={colonist} fixedStepPresentationSeconds={simulationSnapshot.clock.fixedStepMinutes * simulationSnapshot.clock.realSecondsPerSimulationHour / 60} key={colonist.id} />)}
       </Suspense>
       {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
       <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />

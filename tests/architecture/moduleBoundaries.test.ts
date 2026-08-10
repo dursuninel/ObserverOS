@@ -193,4 +193,12 @@ describe('module boundaries', () => {
       }
     }
   });
+
+  it('keeps character object and mixer identity independent of animation snapshot changes', () => {
+    const source = readFileSync(resolve(sourceRoot, 'game/world/renderer/RuntimeAsset.tsx'), 'utf8');
+    expect(source).toContain('new AnimationMixer(object)');
+    expect(source).toContain('[asset.animationClips, object]');
+    expect(source).not.toContain('[animation, object]');
+    expect(source).not.toContain('mixer.stopAllAction()');
+  });
 });

@@ -16,6 +16,7 @@ export interface SimulationSnapshot {
   readonly clock: Readonly<{
     fixedStepMinutes: number;
     paused: boolean;
+    realSecondsPerSimulationHour: number;
     speed: SimulationSpeed;
   }>;
   readonly eventCount: number;
