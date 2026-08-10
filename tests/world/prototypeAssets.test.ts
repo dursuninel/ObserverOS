@@ -6,7 +6,7 @@ import { prototypeAssetDefinitions, requirePrototypeAsset } from '../../src/game
 
 describe('prototype runtime assets', () => {
   it('registers only physical runtime files with source provenance', () => {
-    expect(prototypeAssetDefinitions).toHaveLength(18);
+    expect(prototypeAssetDefinitions).toHaveLength(22);
     for (const asset of prototypeAssetDefinitions) {
       expect(asset.originalPath.startsWith('assets-source/')).toBe(true);
       expect(asset.runtimePath.startsWith('/assets/runtime/')).toBe(true);

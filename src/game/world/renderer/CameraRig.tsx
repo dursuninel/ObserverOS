@@ -2,34 +2,41 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MathUtils, OrthographicCamera, Vector3 } from 'three';
 
-import { FACILITY_POSITIONS, getSafeCameraTarget } from '../prototype/prototypeConfig';
+import { CAMERA_OFFSET, clampCameraTargetInScreenSpace, clampCameraZoom, getCameraPanLimits, getCameraPresetTarget, getCameraZoomRange, mapScreenDragWithBasis } from '../prototype/cameraMath';
+import { getSafeCameraTarget } from '../prototype/prototypeConfig';
 import type { CameraPreset } from '../prototype/types';
 
-const PRESET_TARGETS: Record<CameraPreset, readonly [number, number, number]> = {
-  overview: [1, 0, 0],
-  reactor: FACILITY_POSITIONS.reactor,
-  mine: FACILITY_POSITIONS.mine,
-  habitat: FACILITY_POSITIONS.habitat,
-};
-
-export function CameraRig({ preset }: { readonly preset: CameraPreset }) {
+export function CameraRig({ panelOpen, preset, resetToken }: { readonly panelOpen: boolean; readonly preset: CameraPreset; readonly resetToken: number }) {
   const { camera, gl, size } = useThree();
-  const target = useRef(new Vector3(...PRESET_TARGETS.overview));
-  const destination = useRef(new Vector3(...PRESET_TARGETS.overview));
-  const desiredZoom = useRef(23);
+  const target = useRef(new Vector3(...getCameraPresetTarget('overview')));
+  const destination = useRef(new Vector3(...getCameraPresetTarget('overview')));
+  const desiredZoom = useRef(40);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const previousPinchDistance = useRef<number | null>(null);
+  const cameraRight = useRef(new Vector3());
+  const cameraUpOnGround = useRef(new Vector3());
+  const panOrigin = useRef<{ x: number; y: number } | null>(null);
+  const panStartTarget = useRef(new Vector3());
+  const panClampOrigin = useRef(new Vector3());
 
   useEffect(() => {
-    const safeTarget = getSafeCameraTarget(PRESET_TARGETS[preset], size.width, size.height);
+    const safeTarget = getSafeCameraTarget(getCameraPresetTarget(preset), size.width, size.height, panelOpen);
+    const range = getCameraZoomRange(size.width, panelOpen);
+    target.current.set(...safeTarget);
     destination.current.set(...safeTarget);
-    desiredZoom.current = preset === 'overview' ? (size.width <= 720 ? 15 : 23) : 45;
-  }, [preset, size.height, size.width]);
+    panClampOrigin.current.set(...safeTarget);
+    desiredZoom.current = preset === 'overview' ? range.overview : range.focus;
+  }, [panelOpen, preset, resetToken, size.height, size.width]);
 
   useEffect(() => {
     const element = gl.domElement;
     const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') pointers.current.clear();
       pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.current.size === 1) {
+        panOrigin.current = { x: event.clientX, y: event.clientY };
+        panStartTarget.current.copy(destination.current);
+      }
       element.setPointerCapture(event.pointerId);
       if (pointers.current.size === 2) {
         const [first, second] = [...pointers.current.values()];
@@ -44,37 +51,60 @@ export function CameraRig({ preset }: { readonly preset: CameraPreset }) {
         const [first, second] = [...pointers.current.values()];
         if (!first || !second) return;
         const distance = Math.hypot(second.x - first.x, second.y - first.y);
-        if (previousPinchDistance.current) desiredZoom.current = MathUtils.clamp(desiredZoom.current * distance / previousPinchDistance.current, 14, 82);
+        if (previousPinchDistance.current) desiredZoom.current = clampCameraZoom(desiredZoom.current * distance / previousPinchDistance.current, getCameraZoomRange(size.width, panelOpen));
         previousPinchDistance.current = distance;
         return;
       }
       const zoom = camera instanceof OrthographicCamera ? camera.zoom : 45;
       const scale = 0.012 * (45 / zoom);
-      destination.current.x -= (event.clientX - previous.x) * scale;
-      destination.current.z -= (event.clientY - previous.y) * scale;
+      camera.updateMatrixWorld();
+      cameraRight.current.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
+      cameraUpOnGround.current.setFromMatrixColumn(camera.matrixWorld, 1).setY(0).normalize();
+      const totalX = event.clientX - (panOrigin.current?.x ?? previous.x);
+      const totalY = event.clientY - (panOrigin.current?.y ?? previous.y);
+      const [panX, panZ] = mapScreenDragWithBasis(
+        totalX, totalY, scale,
+        [cameraRight.current.x, cameraRight.current.z], [cameraUpOnGround.current.x, cameraUpOnGround.current.z],
+      );
+      const basis = {
+        right: [cameraRight.current.x, cameraRight.current.z] as const,
+        up: [cameraUpOnGround.current.x, cameraUpOnGround.current.z] as const,
+      };
+      const limits = getCameraPanLimits(size.width, size.height, zoom, panelOpen, basis);
+      const [clampedX, clampedZ] = clampCameraTargetInScreenSpace(
+        [panStartTarget.current.x + panX, panStartTarget.current.z + panZ],
+        [panClampOrigin.current.x, panClampOrigin.current.z],
+        basis,
+        limits,
+      );
+      destination.current.x = clampedX;
+      destination.current.z = clampedZ;
     };
     const onPointerUp = (event: PointerEvent) => {
       pointers.current.delete(event.pointerId);
       previousPinchDistance.current = null;
+      panOrigin.current = null;
     };
     const onWheel = (event: WheelEvent) => {
       if (!(camera instanceof OrthographicCamera)) return;
       event.preventDefault();
-      desiredZoom.current = MathUtils.clamp(desiredZoom.current * (event.deltaY > 0 ? 0.9 : 1.1), 14, 82);
+      desiredZoom.current = clampCameraZoom(desiredZoom.current * (event.deltaY > 0 ? 0.9 : 1.1), getCameraZoomRange(size.width, panelOpen));
     };
     element.addEventListener('pointerdown', onPointerDown);
     element.addEventListener('pointermove', onPointerMove);
     element.addEventListener('pointerup', onPointerUp);
     element.addEventListener('pointercancel', onPointerUp);
+    element.addEventListener('lostpointercapture', onPointerUp);
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       element.removeEventListener('pointerdown', onPointerDown);
       element.removeEventListener('pointermove', onPointerMove);
       element.removeEventListener('pointerup', onPointerUp);
       element.removeEventListener('pointercancel', onPointerUp);
+      element.removeEventListener('lostpointercapture', onPointerUp);
       element.removeEventListener('wheel', onWheel);
     };
-  }, [camera, gl]);
+  }, [camera, gl, panelOpen, size.height, size.width]);
 
   /* eslint-disable react-hooks/immutability -- R3F camera transforms are intentionally imperative inside the render loop. */
   useFrame(() => {
@@ -83,7 +113,7 @@ export function CameraRig({ preset }: { readonly preset: CameraPreset }) {
       camera.zoom = MathUtils.lerp(camera.zoom, desiredZoom.current, 0.12);
       camera.updateProjectionMatrix();
     }
-    camera.position.set(target.current.x + 16, 17, target.current.z + 19);
+    camera.position.set(target.current.x + CAMERA_OFFSET[0], CAMERA_OFFSET[1], target.current.z + CAMERA_OFFSET[2]);
     camera.lookAt(target.current);
   });
   /* eslint-enable react-hooks/immutability */

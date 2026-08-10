@@ -1,4 +1,6 @@
-import type { FacilityId, PrototypeDebugState, QualityProfileId } from './types';
+import type { FacilityId, PrototypeDebugState, QualityProfileId, WorldMetrics } from './types';
+
+export const EMPTY_METRICS: WorldMetrics = { drawCalls: 0, fps: 0, frameTimeMs: 0, geometryCount: 0, lightCount: 0, particleCount: 0, textureCount: 0, triangleCount: 0 };
 
 export const DEFAULT_PROTOTYPE_STATE: PrototypeDebugState = {
   cameraPreset: 'overview',
@@ -10,15 +12,6 @@ export const DEFAULT_PROTOTYPE_STATE: PrototypeDebugState = {
   safeAreasVisible: false,
   snowEnabled: true,
   timeOfDay: 0.74,
-};
-
-export const FACILITY_POSITIONS: Readonly<Record<FacilityId, readonly [number, number, number]>> = {
-  reactor: [-5, 0.2, -2],
-  solar: [-10, 0.18, 5],
-  battery: [-1, 0.18, 5],
-  mine: [9, 0.18, -5],
-  habitat: [3, 0.18, -4],
-  oxygen: [8, 0.18, 4],
 };
 
 export const QUALITY_PROFILES: Readonly<Record<QualityProfileId, { dpr: number; shadows: boolean; snowParticles: number; streetLights: number }>> = {
@@ -60,9 +53,9 @@ export function getFacilityVisualSignature(id: FacilityId, state: string, timeOf
   return { color: night ? '#ffc374' : '#86c8d0', intensity: night ? 1.4 : 0.35, speed: 0 };
 }
 
-export function getSafeCameraTarget(target: readonly [number, number, number], viewportWidth: number, viewportHeight: number): readonly [number, number, number] {
+export function getSafeCameraTarget(target: readonly [number, number, number], viewportWidth: number, viewportHeight: number, panelOpen = true): readonly [number, number, number] {
   const isMobile = viewportWidth <= 720;
-  const horizontalOffset = isMobile ? 0 : Math.min(3.2, (360 / Math.max(viewportWidth, 1)) * 8);
-  const depthOffset = isMobile ? Math.min(2.8, (viewportHeight * 0.38 / Math.max(viewportHeight, 1)) * 6) : 0.7;
+  const horizontalOffset = isMobile || !panelOpen ? 0 : Math.min(3.2, (360 / Math.max(viewportWidth, 1)) * 8);
+  const depthOffset = isMobile && panelOpen ? Math.min(2.8, (viewportHeight * 0.38 / Math.max(viewportHeight, 1)) * 6) : 0.45;
   return [target[0] + horizontalOffset, target[1], target[2] + depthOffset];
 }
