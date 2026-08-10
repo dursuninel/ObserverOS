@@ -123,6 +123,7 @@ describe('module boundaries', () => {
     for (const file of simulationFiles) {
       const imports = moduleSpecifiers(file);
       const names = identifiers(file);
+      const source = readFileSync(file, 'utf8');
 
       for (const packageName of bannedPackages) {
         expect(
@@ -140,6 +141,10 @@ describe('module boundaries', () => {
 
       for (const globalName of bannedBrowserGlobals) {
         expect(names.has(globalName), `${relative(sourceRoot, file)} uses ${globalName}`).toBe(false);
+      }
+
+      for (const nondeterministicApi of ['Date.now', 'Math.random', 'performance.now', 'requestAnimationFrame']) {
+        expect(source.includes(nondeterministicApi), `${relative(sourceRoot, file)} uses ${nondeterministicApi}`).toBe(false);
       }
     }
   });

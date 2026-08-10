@@ -184,6 +184,56 @@ Gerçek gameplay ve Simulation Core uygulanmadan, kanonik NIVALIS kolonisi için
 
 ---
 
+## Faz 1 — Final kapanış
+
+**Durum:** TAMAMLANDI — KULLANICI ONAYLI
+**Tarih:** 10 Ağustos 2026
+
+- Test 4 kullanıcı görsel incelemesinden geçti.
+- Son cleanup sırasında Habitat annex yanında kompozisyona anlamsız gelen objenin `PROTOTYPE_LAYOUT.zones.coreCrates` içindeki `[5.6, -2.1]` placement'ında render edilen dekoratif `supply-crate` olduğu kesinleştirildi.
+- Bu tek dekor placement'ı kaldırıldı; kanonik `habitat-annex`, `habitat-tunnel` ve `floor-light` bileşenleri korundu.
+- Cleanup sonrası Faz 1 lint, typecheck, layout ve asset testleri PASS; gerçek browser Habitat focus kontrolü PASS.
+
+---
+
+## Faz 2 — Simulation Clock + Deterministic Simulation Core
+
+**Durum:** Kullanıcı incelemesine hazır
+**Tarih:** 10 Ağustos 2026
+
+### Genel özet
+
+- React, Three.js, Zustand ve browser API'lerinden bağımsız authoritative `SimulationEngine` gerçek fixed-step çekirdeğe dönüştürüldü.
+- `SimulationClock`, integer simulation minute tutar. Kanonik 25 gerçek saniye / simulation hour ve 1 simulation minute step nedeniyle ×1 fixed-step eşiği yaklaşık 416,67 ms'dir; rasyonel microsecond accumulator frame parçalanmasından bağımsız sonuç üretir.
+- Pause, ×1, ×2 ve ×4 gerçek progression'ı kontrol eder. Pause wall-time backlog oluşturmaz ve explicit fixed-step girişini de durdurur.
+- Kanonik Energy/Oxygen/Material resource ledger, storage capacity, production/consumption rates ve capacity clamp eklendi. Capacity dışındaki fiziksel stok korunur fakat `accessibleStored` hesabına girmez; dolu storage üretimi actual headroom'a clamp eder ve resource kaybolmaz.
+- Facility instance/state/mode, EnergyPriority, command request/result ve injectable SafetyInterlock sözleşmeleri kuruldu. Mine Eco/Normal/Offline komutları authoritative state ve gerçek Material/Energy sonucunu değiştirir.
+- Enerji darlığında allocation `Critical → High → Normal → Low`, eşit priority'de stable facility ID ascending sırasıyla deterministic yapılır.
+- SimulationEvent temeli yalnız gerçek Faz 2 speed-change ve facility command-result event'lerini deterministic sequence ID ile üretir.
+- Her tick/batch sonrası deep-frozen `SimulationSnapshot` yayınlanır. Snapshot; clock/time/day-night/cycle, resources, facilities ve event count içerir.
+- React composition için `SimulationProvider` + `useSyncExternalStore` sınırı ve renderer için salt-okunur simulation-time adapter'ı eklendi. Renderer, Zustand ve Faz 1 `DebugState` authoritative yapılmadı.
+- Headless runner ile Canvas/DOM mount etmeden N fixed step çalıştırma, snapshot alma ve serialized authoritative state karşılaştırma desteklenir.
+
+### Doğrulama
+
+- Lint: PASS — 0 hata, 0 uyarı
+- Typecheck: PASS
+- Test: PASS — 14 test dosyası, 76 test
+- Headless Faz 2 matrisi: PASS — 4 dosya, 29 test
+- Production build: PASS — mevcut büyük bundle/chunk uyarısı sürüyor
+- `git diff --check`: PASS
+
+### Kapsam sınırı ve deferred
+
+- Workforce assignment, colonist job AI, Condition/wear progression ve gerçek Maintenance Faz 3'e bırakıldı.
+- Reactor output ramp süreleri için kanonik exact balance config bulunmadığından yeni süre uydurulmadı. Reactor mode değişimi `requiresRampedModeChange` ile işaretlendi ve ramp config/runtime gelmeden anlık mode değişimi SafetyInterlock tarafından block edilir; generic mode/state contract gelecekteki facility-specific ramp sistemini engellemez.
+- Protocol Runtime, Graph Editor gameplay, Debugger UI, Colony Health, Assessment, campaign/sectors, final HUD ve facility interaction uygulanmadı.
+- Save/load continuity uygulanmadı; deterministic serialized authoritative state save entegrasyonu için temiz sınır sağlar.
+- Faz 1 renderer korunmuştur; gerçek gameplay world bağlama veya DebugState'in simulation truth'a dönüştürülmesi yapılmadı.
+- Yeni dependency eklenmedi. Commit veya push yapılmadı.
+
+---
+
 ## Faz 1 — Test 4 / Camera & Habitat Presentation düzeltmesi
 
 **Durum:** Faz 1 — Kullanıcı incelemesine hazır
