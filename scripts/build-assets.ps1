@@ -42,15 +42,17 @@ function Write-TextureVariant([string]$sourcePath, [string]$destinationPath, [in
 $kaykitDestination = Join-Path $runtimeRoot 'kaykit'
 $kaykitSource = Join-Path $sourceRoot 'kaykit-space\Models'
 @(
-  'basemodule_A', 'basemodule_B', 'basemodule_C', 'basemodule_E',
+  'basemodule_A', 'basemodule_B', 'basemodule_C', 'basemodule_D', 'basemodule_E',
   'cargo_A_stacked', 'drill_structure', 'landingpad_large', 'lights',
-  'rock_A', 'rock_B', 'solarpanel', 'structure_tall'
+  'rock_A', 'rock_B', 'solarpanel', 'structure_tall', 'tunnel_straight_A'
 ) | ForEach-Object { Copy-Model $kaykitSource $_ $kaykitDestination }
 Copy-Item -LiteralPath (Join-Path $kaykitSource 'spacebits_texture.png') -Destination $kaykitDestination -Force
 
 $ultimateDestination = Join-Path $runtimeRoot 'ultimate'
 Ensure-Directory $ultimateDestination
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'quaternius-ultimate\Characters\Models\Astronaut_FinnTheFrog.gltf') -Destination $ultimateDestination -Force
+@('Astronaut_FinnTheFrog', 'Astronaut_RaeTheRedPanda', 'Astronaut_BarbaraTheBee') | ForEach-Object {
+  Copy-Item -LiteralPath (Join-Path $sourceRoot "quaternius-ultimate\Characters\Models\$_.gltf") -Destination $ultimateDestination -Force
+}
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'quaternius-ultimate\Environment\Models\Rock_Large_1.gltf') -Destination $ultimateDestination -Force
 
 $modularDestination = Join-Path $runtimeRoot 'modular'

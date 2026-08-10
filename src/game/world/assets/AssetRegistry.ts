@@ -11,6 +11,7 @@ export interface AssetTransform {
 }
 
 export interface AssetDefinition {
+  readonly animationClips?: readonly string[];
   readonly id: string;
   readonly materialProfile?: {
     readonly emissiveIntensity?: number;

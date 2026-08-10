@@ -16,6 +16,9 @@ interface RuntimeAssetProps {
 }
 
 export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY = 0, scaleMultiplier = 1 }: RuntimeAssetProps) {
+  if (animation && (!asset.animationClips || !asset.animationClips.includes(animation))) {
+    throw new Error(`Animation "${animation}" is not declared for prototype asset "${asset.id}".`);
+  }
   const gltf = useLoader(GLTFLoader, asset.runtimePath);
   const object = useMemo(() => {
     const instance = clone(gltf.scene);
@@ -28,10 +31,11 @@ export function RuntimeAsset({ animation, asset, position = [0, 0, 0], rotationY
   useEffect(() => {
     if (!mixer || !animation || currentAction.current === animation) return;
     mixer.stopAllAction();
-    const clip = gltf.animations.find((candidate) => candidate.name === animation) ?? gltf.animations[0];
-    if (clip) mixer.clipAction(clip).reset().fadeIn(0.15).play();
+    const clip = gltf.animations.find((candidate) => candidate.name === animation);
+    if (!clip) throw new Error(`Animation "${animation}" is missing from runtime asset "${asset.id}".`);
+    mixer.clipAction(clip).reset().fadeIn(0.18).play();
     currentAction.current = animation;
-  }, [animation, gltf.animations, mixer]);
+  }, [animation, asset.id, gltf.animations, mixer]);
 
   useEffect(() => () => { mixer?.stopAllAction(); }, [mixer]);
   useFrame((_, delta) => mixer?.update(delta));

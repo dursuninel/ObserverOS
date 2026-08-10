@@ -31,7 +31,7 @@ const facilities: readonly PrototypeFacilityPlacement[] = [
   { id: 'solar', primaryAssetId: 'solar-panel', position: [-6.5, 3.5], rotationY: Math.PI, footprintOverride: { width: 5, depth: 3 } },
   { id: 'reactor', primaryAssetId: 'reactor-body', position: [-4, -3.6], rotationY: 0 },
   { id: 'battery', primaryAssetId: 'battery-body', position: [-1, 3.6], rotationY: Math.PI },
-  { id: 'habitat', primaryAssetId: 'habitat', position: [1.5, -3.6], rotationY: 0 },
+  { id: 'habitat', primaryAssetId: 'habitat', position: [1.5, -3.6], rotationY: 0, footprintOverride: { width: 6.6, depth: 4.2 } },
   { id: 'oxygen', primaryAssetId: 'oxygen', position: [4.5, 3.6], rotationY: Math.PI },
   { id: 'mine', primaryAssetId: 'mine-drill', position: [7, -3.8], rotationY: 0 },
   { id: 'expansion', primaryAssetId: 'expansion-pad', position: [9.5, 4.3], rotationY: Math.PI },
@@ -111,12 +111,43 @@ export const PROTOTYPE_LAYOUT = {
   facilities,
   roadEdges: [...spineEdges, ...facilityEdges] as readonly PrototypeRoadEdge[],
   roadNodes,
+  habitat: {
+    departurePoints: [[1.05, -1.05], [1.5, -1.02], [1.95, -1.05]] as readonly Point2[],
+    restPoints: [
+      [-0.25, -1.12], [0.2, -0.72], [0.55, -1.2], [0.9, -0.55],
+      [1.3, -1.28], [1.7, -0.55], [2.1, -1.25], [2.45, -0.62],
+      [2.85, -1.18], [3.2, -0.55], [3.55, -1.12], [3.95, -0.72],
+      [0.35, -0.22], [1.1, -0.25], [2.25, -0.24], [3.35, -0.24],
+    ] as readonly Point2[],
+    stagingPoints: [[0.7, -0.88], [1.25, -0.72], [1.75, -0.72], [2.3, -0.88]] as readonly Point2[],
+  },
+  plateauVertices: [
+    [-10.8, -4.8], [-8.7, -7], [-4.8, -7.8], [-1.2, -7.4], [2.4, -8.1], [6.5, -7.2],
+    [10.9, -6.3], [13.1, -3.2], [12.4, 0.8], [13.3, 4.7], [10.4, 7.2], [6.4, 7.7],
+    [2.8, 7.25], [-1.4, 8], [-5.5, 7.1], [-9.3, 6.2], [-11.7, 3.3], [-11.1, -0.7],
+  ] as readonly Point2[],
+  hazeAnchors: [[-7.5, 4.7], [-3.2, -5.8], [2.2, 6.1], [6.8, -5.4], [10.2, 3.4]] as readonly Point2[],
   zones: {
     coreCrates: [[-2.7, 2.1, 0.2], [3.2, 2.1, -0.4], [5.6, -2.1, 0.7], [-5.4, -2.1, -0.3]] as const,
     outerRocks: [[-10, -6, 0.5, 0.75], [-10.5, 5.5, 1.4, 0.55], [12, -5.5, 2.2, 0.65], [12.5, 7, 0.2, 0.52], [-1, 7.2, 1.8, 0.48], [3, -7.2, 2.6, 0.5]] as const,
     transitionRocks: [[-8.8, -2.7, 0.4], [-8.5, 2.7, 1.2], [10.7, -1.8, 2.4], [7.5, 7.1, 0.8], [-4.8, 7, 1.7], [-0.8, -7, 2.8]] as const,
   },
 } as const;
+
+export function getPrototypeWorldBounds(): { readonly maxX: number; readonly maxZ: number; readonly minX: number; readonly minZ: number } {
+  const points: Point2[] = [...PROTOTYPE_LAYOUT.plateauVertices, ...PROTOTYPE_LAYOUT.roadNodes.map((node) => node.position)];
+  for (const facility of PROTOTYPE_LAYOUT.facilities) {
+    const footprint = getFacilityFootprint(facility.id);
+    points.push(
+      [footprint.center[0] - footprint.width / 2, footprint.center[1] - footprint.depth / 2],
+      [footprint.center[0] + footprint.width / 2, footprint.center[1] + footprint.depth / 2],
+    );
+  }
+  return {
+    minX: Math.min(...points.map(([x]) => x)), maxX: Math.max(...points.map(([x]) => x)),
+    minZ: Math.min(...points.map(([, z]) => z)), maxZ: Math.max(...points.map(([, z]) => z)),
+  };
+}
 
 export function getRoadNode(id: string): PrototypeRoadNode {
   const node = PROTOTYPE_LAYOUT.roadNodes.find((candidate) => candidate.id === id);

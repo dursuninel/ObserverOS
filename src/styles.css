@@ -202,6 +202,13 @@ a {
   padding: 0.45rem 0.65rem;
 }
 
+.camera-reset-button {
+  background: rgba(100, 190, 196, 0.1);
+  border: 1px solid rgba(116, 203, 208, 0.42);
+  color: #c9eef0;
+  min-height: 2rem;
+}
+
 .prototype-debug-panel.collapsed {
   align-items: center;
   bottom: auto;

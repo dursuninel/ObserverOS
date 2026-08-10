@@ -181,3 +181,38 @@ Gerçek gameplay ve Simulation Core uygulanmadan, kanonik NIVALIS kolonisi için
 
 - Simulation Core, gameplay pathfinding, Workforce, gerçek facility state machine, resource ledger, Protocol runtime/editor ve Faz 2 HUD uygulanmadı.
 - Commit veya push yapılmadı; kullanıcı talimatı bekleniyor.
+
+---
+
+## Faz 1 — Test 3 / World Presentation & Life Pass
+
+**Durum:** Faz 1 — Kullanıcı incelemesine hazır
+**Tarih:** 10 Ağustos 2026
+
+Test 2 kullanıcı görsel incelemesinden geçmedi. Test 2 ile kurulan ortak `PrototypeLayout` ve görünür yol–navigasyon birliği korunarak aşağıdaki sunum iyileştirmeleri yapıldı:
+
+- Kamera pan hareketi camera-space/screen-space basis üzerinden düzeltildi; layout-derived pan sınırları, güvenli zoom aralıkları ve pan/zoom'u birlikte sıfırlayan overview davranışı eklendi.
+- Ağır global sis yerine çok hafif depth cue ve world-space, zemine yakın lokal donuk haze kullanıldı.
+- Dönen particle cloud kaldırıldı; deterministik hız ve rüzgâr varyasyonu olan, düşen ve wrap eden buffer-level kar alanı eklendi.
+- Perfect polygon zemin yerine deterministik, düzensiz kenarlı donmuş plato kompozisyonu oluşturuldu.
+- Tek kanonik Habitat facility'si annex, bağlantı modülü ve plaza ile görsel compound haline getirildi; rest, staging ve departure noktaları `PrototypeLayout` içinde tanımlandı.
+- Kolonici sunum çevrimleri deterministik fakat farklı süre, hedef, lane, hız ve faz profilleriyle çeşitlendirildi; hareket süresi yol uzunluğu / yürüme hızı üzerinden hesaplanır.
+- Uyumlu mevcut astronot varyantları ve doğrulanmış `Idle`/`Walk` klip kataloğu kullanıldı.
+- Bakım işçisi habitat–yol–tesis–iş noktası–yol–habitat sunum çevrimine geçirildi; silah animasyonu kullanılmadan kısıtlı servis ışığı/kıvılcım etkinliği eklendi.
+- Kamera, sis, kar, habitat, 15/50 kolonici ve reaktör/maden bakım çevrimleri manuel olarak birlikte doğrulandı.
+
+### Doğrulama
+
+- Lint: PASS
+- Typecheck: PASS
+- Test: PASS — 12 test dosyası, 44 test
+- Production build: PASS — mevcut büyük bundle/chunk uyarısı sürüyor
+- High/15, gece + sis + kar: yaklaşık 144 FPS, 6.9 ms, 140 draw, 140558 triangle, 46 geometry, 86 texture, 12 light, 480 particle
+- High/50, gece + sis + kar: yaklaşık 130 FPS, 7.7 ms, 188 draw, 341672 triangle, 46 geometry, 86 texture, 12 light, 480 particle
+- High/bakım aktif: yaklaşık 144 FPS, 6.9 ms; reaktör ve maden için tam gidiş–etkinlik–dönüş çevrimi gözlendi
+
+### Kapsam sınırı
+
+- Bu çalışma yalnız Faz 1 presentation prototype kapsamındadır. Simulation Core, gerçek Workforce/Maintenance, gameplay state, final HUD ve Faz 2 uygulanmadı.
+- Faz 1 tamamlandı veya onaylandı olarak işaretlenmedi; kullanıcı görsel incelemesi bekleniyor.
+- Commit veya push yapılmadı; kullanıcı talimatı bekleniyor.

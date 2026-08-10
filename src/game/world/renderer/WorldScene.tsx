@@ -1,16 +1,18 @@
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { AdditiveBlending, MathUtils, Mesh, PointLight } from 'three';
+import { BufferAttribute, MathUtils, Mesh, PointLight, Shape } from 'three';
 
 import { requirePrototypeAsset } from '../assets/prototypeAssetRegistry';
-import { getColonistPose } from '../prototype/navigation';
+import { getColonistPose, getMaintenancePose, getPrototypeCharacterAssetId } from '../prototype/navigation';
+import { advanceSnowField, createSnowField } from '../prototype/environmentPresentation';
 import { getFacilityVisualSignature, getLampIntensity, isNight, QUALITY_PROFILES } from '../prototype/prototypeConfig';
-import { getFacilityPlacement, getFacilityWorkPoint, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT } from '../prototype/prototypeLayout';
+import { getFacilityPlacement, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT } from '../prototype/prototypeLayout';
 import type { FacilityId, PrototypeDebugState, WorldMetrics } from '../prototype/types';
 import { CameraRig } from './CameraRig';
 import { RuntimeAsset } from './RuntimeAsset';
 
 interface WorldSceneProps {
+  readonly cameraResetToken: number;
   readonly debugPanelOpen: boolean;
   readonly debugState: PrototypeDebugState;
   readonly onMetrics: (metrics: WorldMetrics) => void;
@@ -71,7 +73,16 @@ function Facility({ debugState, id }: { readonly debugState: PrototypeDebugState
   if (id === 'solar') return <group {...groupProps}>{[[-1.8, 0, -0.55], [0, 0, -0.55], [1.8, 0, -0.55], [-0.9, 0, 0.7], [0.9, 0, 0.7]].map(([x, y, z], index) => <RuntimeAsset key={index} asset={requirePrototypeAsset('solar-panel')} position={[x ?? 0, y ?? 0, z ?? 0]} />)}<FacilityActivity {...signature} height={0.45} /></group>;
   if (id === 'battery') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('battery-body')} /><RuntimeAsset asset={requirePrototypeAsset('battery-cargo')} /><FacilityActivity {...signature} height={1.65} /></group>;
   if (id === 'mine') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('mine-drill')} /><FacilityActivity {...signature} height={2.8} /></group>;
-  if (id === 'habitat') return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('habitat')} /><FacilityActivity {...signature} height={1.15} /></group>;
+  if (id === 'habitat') return <group {...groupProps}>
+    <mesh position={[0.9, -0.13, 2.35]} rotation-x={-Math.PI / 2} scale={[1.35, 0.72, 1]}><circleGeometry args={[2.15, 10]} /><meshStandardMaterial color="#65787c" roughness={0.92} /></mesh>
+    <RuntimeAsset asset={requirePrototypeAsset('habitat')} />
+    <RuntimeAsset asset={requirePrototypeAsset('habitat-tunnel')} position={[1.35, 0, 0]} rotationY={Math.PI / 2} />
+    <RuntimeAsset asset={requirePrototypeAsset('habitat-annex')} position={[2.65, 0, 0.05]} />
+    <RuntimeAsset asset={requirePrototypeAsset('floor-light')} position={[-0.4, 0.02, 2.4]} />
+    <RuntimeAsset asset={requirePrototypeAsset('floor-light')} position={[1.2, 0.02, 2.7]} />
+    <RuntimeAsset asset={requirePrototypeAsset('floor-light')} position={[2.7, 0.02, 2.35]} />
+    <FacilityActivity {...signature} height={1.15} />
+  </group>;
   return <group {...groupProps}><RuntimeAsset asset={requirePrototypeAsset('oxygen')} /><RuntimeAsset asset={requirePrototypeAsset('oxygen-vent')} /><FacilityActivity {...signature} height={1.55} /></group>;
 }
 
@@ -82,19 +93,27 @@ function StreetLights({ debugState }: { readonly debugState: PrototypeDebugState
 }
 
 function Snow({ count }: { readonly count: number }) {
-  const points = useRef<import('three').Points>(null);
-  const positions = useMemo(() => {
-    const values = new Float32Array(count * 3);
-    for (let index = 0; index < count; index += 1) {
-      const seed = index * 16807 % 2147483647;
-      values[index * 3] = 1.5 + ((seed % 1000) / 1000 - 0.5) * 25;
-      values[index * 3 + 1] = 1 + ((seed * 17 % 1000) / 1000) * 12;
-      values[index * 3 + 2] = ((seed * 31 % 1000) / 1000 - 0.5) * 18;
-    }
-    return values;
-  }, [count]);
-  useFrame((_, delta) => { if (points.current) points.current.rotation.y += delta * 0.015; });
-  return <points ref={points}><bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry><pointsMaterial color="#e8f7ff" opacity={0.72} size={0.06} transparent depthWrite={false} blending={AdditiveBlending} /></points>;
+  const positionAttribute = useRef<BufferAttribute>(null);
+  const field = useMemo(() => createSnowField(count), [count]);
+  useFrame((_, delta) => {
+    advanceSnowField(field, Math.min(delta, 0.05));
+    if (positionAttribute.current) positionAttribute.current.needsUpdate = true;
+  });
+  return <points><bufferGeometry><bufferAttribute ref={positionAttribute} attach="attributes-position" args={[field.positions, 3]} /></bufferGeometry><pointsMaterial color="#dce9ed" opacity={0.58} size={0.045} sizeAttenuation transparent depthWrite={false} /></points>;
+}
+
+function LocalFrozenHaze() {
+  const mist = useRef<import('three').Group>(null);
+  useFrame(({ clock }) => {
+    if (!mist.current) return;
+    mist.current.children.forEach((child, index) => {
+      const anchor = PROTOTYPE_LAYOUT.hazeAnchors[index];
+      if (!anchor) return;
+      child.position.x = anchor[0] + Math.sin(clock.elapsedTime * (0.035 + index * 0.004) + index) * 0.8;
+      child.position.z = anchor[1] + Math.cos(clock.elapsedTime * (0.028 + index * 0.003) + index) * 0.45;
+    });
+  });
+  return <group ref={mist}>{PROTOTYPE_LAYOUT.hazeAnchors.map(([x, z], index) => <mesh key={index} position={[x, 0.12 + index % 2 * 0.03, z]} rotation-x={-Math.PI / 2} scale={[1.8 + index % 3 * 0.35, 1.1, 1]}><circleGeometry args={[2.4, 14]} /><meshBasicMaterial color="#d4e2e5" depthWrite={false} opacity={0.035} transparent /></mesh>)}</group>;
 }
 
 function Colonist({ index }: { readonly index: number }) {
@@ -109,28 +128,56 @@ function Colonist({ index }: { readonly index: number }) {
     group.current.position.set(...pose.current.position);
     group.current.rotation.y = MathUtils.lerp(group.current.rotation.y, pose.current.rotationY, 0.14);
   });
-  return <group ref={group} scale={0.92}><RuntimeAsset asset={requirePrototypeAsset('prototype-astronaut')} animation={animation} /></group>;
+  return <group ref={group} scale={0.92}><RuntimeAsset asset={requirePrototypeAsset(getPrototypeCharacterAssetId(index))} animation={animation} /></group>;
 }
 
 function MaintenanceWorker({ facility }: { readonly facility: 'mine' | 'reactor' }) {
-  const [x, z] = getFacilityWorkPoint(facility);
-  return <group position={[x, 0.32, z]} rotation-y={Math.PI} scale={0.92}><RuntimeAsset animation="Weapon" asset={requirePrototypeAsset('prototype-astronaut')} /><pointLight color="#f1c46e" distance={2.2} intensity={0.8} position={[0, 1.1, 0]} /></group>;
+  const group = useRef<import('three').Group>(null);
+  const startTime = useRef<number | null>(null);
+  const [animation, setAnimation] = useState<'Idle' | 'Walk'>('Idle');
+  const [activity, setActivity] = useState(false);
+  useFrame(({ clock }) => {
+    startTime.current ??= clock.elapsedTime;
+    const pose = getMaintenancePose(facility, clock.elapsedTime - startTime.current);
+    setAnimation((current) => current === pose.animation ? current : pose.animation);
+    setActivity((current) => current === pose.activity ? current : pose.activity);
+    if (!group.current) return;
+    group.current.position.set(...pose.position);
+    group.current.rotation.y = MathUtils.lerp(group.current.rotation.y, pose.rotationY, 0.14);
+  });
+  return <group ref={group} scale={0.92}><RuntimeAsset animation={animation} asset={requirePrototypeAsset(facility === 'reactor' ? 'prototype-astronaut-rae' : 'prototype-astronaut-barbara')} />{activity && <MaintenanceActivity />}</group>;
+}
+
+function MaintenanceActivity() {
+  const sparks = useRef<import('three').Group>(null);
+  const serviceLight = useRef<PointLight>(null);
+  useFrame(({ clock }) => {
+    const pulse = Math.sin(clock.elapsedTime * 5.2) > 0.72;
+    if (sparks.current) sparks.current.visible = pulse;
+    if (serviceLight.current) serviceLight.current.intensity = pulse ? 1.15 : 0.28;
+  });
+  return <group position={[0.12, 0.72, 0.18]}><group ref={sparks}>{[-0.08, 0, 0.09].map((x, index) => <mesh key={index} position={[x, index * 0.09, index % 2 * 0.05]}><sphereGeometry args={[0.025, 6, 6]} /><meshBasicMaterial color="#ffd18a" /></mesh>)}</group><pointLight ref={serviceLight} color="#f1b861" distance={2} intensity={0.3} /></group>;
 }
 
 function Ground() {
-  const { groundCenter, groundDepth, groundWidth } = PROTOTYPE_LAYOUT.camera;
+  const plateau = useMemo(() => {
+    const shape = new Shape();
+    PROTOTYPE_LAYOUT.plateauVertices.forEach(([x, z], index) => index === 0 ? shape.moveTo(x, z) : shape.lineTo(x, z));
+    shape.closePath();
+    return shape;
+  }, []);
   return (
-    <group position={[groundCenter[0], -0.08, groundCenter[1]]}>
-      <mesh receiveShadow rotation-x={-Math.PI / 2} scale={[groundWidth / 24, groundDepth / 24, 1]}>
-        <circleGeometry args={[12, 12]} />
+    <group>
+      <mesh receiveShadow position={[0, -0.08, 0]} rotation-x={-Math.PI / 2}>
+        <shapeGeometry args={[plateau]} />
         <meshStandardMaterial color="#93a7ad" roughness={1} metalness={0} />
       </mesh>
-      {([[-5, 0.012, 2.7, 2.2], [4.2, 0.014, -2.4, 2.8], [0.5, 0.016, 4.8, 1.8]] as const).map(([x, y, z, radius], index) => <mesh key={index} position={[x, y, z]} rotation-x={-Math.PI / 2}><circleGeometry args={[radius, 16]} /><meshStandardMaterial color="#b8c9cc" opacity={0.16} roughness={0.92} transparent /></mesh>)}
+      {([[-5, 0.012, 2.7, 2.2], [4.2, 0.014, -2.4, 2.8], [0.5, 0.016, 4.8, 1.8], [8.2, 0.018, 2.7, 1.45]] as const).map(([x, y, z, radius], index) => <mesh key={index} position={[x, y, z]} rotation-x={-Math.PI / 2} rotation-z={index * 0.47}><circleGeometry args={[radius, 7 + index % 2]} /><meshStandardMaterial color={index % 2 ? '#adbec2' : '#c0cfd1'} opacity={0.13} roughness={0.95} transparent /></mesh>)}
     </group>
   );
 }
 
-function WorldContent({ debugPanelOpen, debugState, onMetrics }: WorldSceneProps) {
+function WorldContent({ cameraResetToken, debugPanelOpen, debugState, onMetrics }: WorldSceneProps) {
   const quality = QUALITY_PROFILES[debugState.quality];
   const night = isNight(debugState.timeOfDay);
   const skyColor = night ? '#07101b' : '#9fb8c0';
@@ -138,10 +185,11 @@ function WorldContent({ debugPanelOpen, debugState, onMetrics }: WorldSceneProps
   return (
     <>
       <color attach="background" args={[skyColor]} />
-      {debugState.fogEnabled && <fog attach="fog" args={[skyColor, night ? 22 : 26, night ? 48 : 52]} />}
+      {debugState.fogEnabled && <fog attach="fog" args={[skyColor, night ? 58 : 64, night ? 96 : 105]} />}
       <ambientLight intensity={night ? 0.72 : 1.45} color={night ? '#6f87a8' : '#d7eef2'} />
       <directionalLight castShadow={quality.shadows} color={night ? '#86a1cd' : '#fff1d3'} intensity={night ? 1.05 : 2.4} position={[-12, 20, 10]} shadow-mapSize={[1024, 1024]} />
       <Ground />
+      {debugState.fogEnabled && <LocalFrozenHaze />}
       <Suspense fallback={null}>
         {roadTiles.map(({ position: [x, z], rotationY }) => <RuntimeAsset key={`${x}:${z}`} asset={requirePrototypeAsset('road-tile')} position={[x, 0.02, z]} rotationY={rotationY} scaleMultiplier={0.36} />)}
         {(['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen'] as const).map((id) => <Facility key={id} debugState={debugState} id={id} />)}
@@ -157,17 +205,17 @@ function WorldContent({ debugPanelOpen, debugState, onMetrics }: WorldSceneProps
       </Suspense>
       {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
       <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />
-      <CameraRig panelOpen={debugPanelOpen} preset={debugState.cameraPreset} />
+      <CameraRig panelOpen={debugPanelOpen} preset={debugState.cameraPreset} resetToken={cameraResetToken} />
     </>
   );
 }
 
-export function WorldScene({ debugPanelOpen, debugState, onMetrics }: WorldSceneProps) {
+export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, onMetrics }: WorldSceneProps) {
   const quality = QUALITY_PROFILES[debugState.quality];
   return (
     <div aria-label="Koloni görsel prototipi" className="world-scene-shell">
       <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
-        <WorldContent debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={onMetrics} />
+        <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} onMetrics={onMetrics} />
       </Canvas>
     </div>
   );
