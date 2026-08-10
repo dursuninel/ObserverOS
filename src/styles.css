@@ -190,6 +190,31 @@ a {
   z-index: 8;
 }
 
+.debug-panel-toggle {
+  align-self: flex-end;
+  background: rgba(113, 199, 207, 0.1);
+  border: 1px solid rgba(113, 199, 207, 0.28);
+  border-radius: 2px;
+  color: #b8d7db;
+  cursor: pointer;
+  font-size: 0.62rem;
+  min-height: 44px;
+  padding: 0.45rem 0.65rem;
+}
+
+.prototype-debug-panel.collapsed {
+  align-items: center;
+  bottom: auto;
+  min-height: 0;
+  padding: 0.45rem;
+  top: 0.7rem;
+  width: auto;
+}
+
+.prototype-debug-panel.collapsed .debug-panel-toggle {
+  min-width: 9rem;
+}
+
 .debug-panel-heading {
   align-items: center;
   display: flex;
@@ -317,6 +342,14 @@ select {
     left: 0;
     padding: 0.65rem;
     right: 0;
+    top: auto;
+    width: auto;
+  }
+  .prototype-debug-panel.collapsed {
+    bottom: 0.75rem;
+    height: auto;
+    left: auto;
+    right: 0.75rem;
     top: auto;
     width: auto;
   }

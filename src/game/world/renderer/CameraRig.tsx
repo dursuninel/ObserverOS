@@ -2,17 +2,18 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MathUtils, OrthographicCamera, Vector3 } from 'three';
 
-import { FACILITY_POSITIONS, getSafeCameraTarget } from '../prototype/prototypeConfig';
+import { getSafeCameraTarget } from '../prototype/prototypeConfig';
+import { getFacilityPlacement, PROTOTYPE_LAYOUT } from '../prototype/prototypeLayout';
 import type { CameraPreset } from '../prototype/types';
 
 const PRESET_TARGETS: Record<CameraPreset, readonly [number, number, number]> = {
-  overview: [1, 0, 0],
-  reactor: FACILITY_POSITIONS.reactor,
-  mine: FACILITY_POSITIONS.mine,
-  habitat: FACILITY_POSITIONS.habitat,
+  overview: [PROTOTYPE_LAYOUT.camera.center[0], 0, PROTOTYPE_LAYOUT.camera.center[1]],
+  reactor: [getFacilityPlacement('reactor').position[0], 0, getFacilityPlacement('reactor').position[1]],
+  mine: [getFacilityPlacement('mine').position[0], 0, getFacilityPlacement('mine').position[1]],
+  habitat: [getFacilityPlacement('habitat').position[0], 0, getFacilityPlacement('habitat').position[1]],
 };
 
-export function CameraRig({ preset }: { readonly preset: CameraPreset }) {
+export function CameraRig({ panelOpen, preset }: { readonly panelOpen: boolean; readonly preset: CameraPreset }) {
   const { camera, gl, size } = useThree();
   const target = useRef(new Vector3(...PRESET_TARGETS.overview));
   const destination = useRef(new Vector3(...PRESET_TARGETS.overview));
@@ -21,10 +22,10 @@ export function CameraRig({ preset }: { readonly preset: CameraPreset }) {
   const previousPinchDistance = useRef<number | null>(null);
 
   useEffect(() => {
-    const safeTarget = getSafeCameraTarget(PRESET_TARGETS[preset], size.width, size.height);
+    const safeTarget = getSafeCameraTarget(PRESET_TARGETS[preset], size.width, size.height, panelOpen);
     destination.current.set(...safeTarget);
-    desiredZoom.current = preset === 'overview' ? (size.width <= 720 ? 15 : 23) : 45;
-  }, [preset, size.height, size.width]);
+    desiredZoom.current = preset === 'overview' ? (size.width <= 720 ? 24 : panelOpen ? 40 : 46) : 48;
+  }, [panelOpen, preset, size.height, size.width]);
 
   useEffect(() => {
     const element = gl.domElement;

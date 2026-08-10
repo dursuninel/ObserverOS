@@ -1,27 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { findPath, getColonistPose, NAV_GRAPH } from '../../src/game/world/prototype/navigation';
+import { findPath, getColonistPose } from '../../src/game/world/prototype/navigation';
 
 describe('prototype presentation navigation', () => {
-  it('finds a deterministic A* route on the declared road graph', () => {
-    expect(findPath('reactor', 'oxygen')).toEqual(['reactor', 'center', 'oxygen']);
-    expect(findPath('reactor', 'oxygen')).toEqual(findPath('reactor', 'oxygen'));
+  it('finds the same deterministic A* route for identical inputs', () => {
+    const first = findPath('habitat-entrance', 'oxygen-entrance');
+    expect(first[0]).toBe('habitat-entrance');
+    expect(first.at(-1)).toBe('oxygen-entrance');
+    expect(first).toEqual(findPath('habitat-entrance', 'oxygen-entrance'));
   });
 
-  it('keeps a walking colonist on graph segments', () => {
-    const pose = getColonistPose(0, 4);
-    expect(pose.state).toBe('walking-to-facility');
-    expect(pose.animation).toBe('Walk');
-    const center = NAV_GRAPH.habitat.position;
-    const reactor = NAV_GRAPH.reactor.position;
-    expect(pose.position[0]).toBeGreaterThanOrEqual(reactor[0]);
-    expect(pose.position[0]).toBeLessThanOrEqual(center[0]);
-  });
-
-  it('exposes idle and working presentation phases without gameplay state', () => {
-    expect(getColonistPose(0, 0).state).toBe('resting');
-    expect(getColonistPose(0, 2.2).state).toBe('assigned');
-    expect(getColonistPose(0, 8).state).toBe('working');
-    expect(getColonistPose(0, 12).state).toBe('walking-to-habitat');
+  it('exposes the complete presentation flow and hides indoor working', () => {
+    expect(getColonistPose(0, 0)).toMatchObject({ state: 'resting', visible: true });
+    expect(getColonistPose(0, 2.2)).toMatchObject({ state: 'assigned', visible: true });
+    expect(getColonistPose(0, 4)).toMatchObject({ animation: 'Walk', state: 'walking-to-facility', visible: true });
+    expect(getColonistPose(0, 8)).toMatchObject({ state: 'working', visible: false });
+    expect(getColonistPose(0, 12)).toMatchObject({ state: 'walking-to-habitat', visible: true });
   });
 });

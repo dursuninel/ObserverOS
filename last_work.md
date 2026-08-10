@@ -87,7 +87,7 @@ Domain sınırlarını erken kurmak amacıyla React ve TypeScript tabanlı web u
 
 ## Faz 1 — ColonyVisualPrototype
 
-**Durum:** Onaya hazır  
+**Durum:** İlk kullanıcı görsel incelemesinde reddedildi; aşağıdaki kalite kapısı düzeltmesi bu kaydın yerini alır
 **Tarih:** 10 Ağustos 2026
 
 ### Kapsam ve amaç
@@ -145,3 +145,39 @@ Gerçek gameplay ve Simulation Core uygulanmadan, kanonik NIVALIS kolonisi için
 - Protocol compiler/runtime ve gerçek graph editor
 - Save/load entegrasyonu ve campaign/progression
 - Final karakter sanatı ve gezegen gameplay içeriği
+
+---
+
+## Faz 1 — Kullanıcı görsel kalite kapısı düzeltmesi
+
+**Durum:** Kullanıcı incelemesi için yeniden hazır
+**Tarih:** 10 Ağustos 2026
+
+### Genel özet
+
+- Önceki kopuk facility koordinatları, görünür yollardan bağımsız navigation graph ve geniş boş zemin kompozisyonu kaldırıldı.
+- Altı facility ile expansion pad; kompakt bir ana operasyon omurgası ve kısa service/entrance bağlantıları çevresinde yeniden yerleştirildi.
+- `PrototypeLayout`, facility placement, footprint, entrance/work point, road node/edge, decor zone ve street-light yerleşimlerinin tek kanonik Faz 1 kaynağı oldu.
+- Görünür yol tile'ları ve deterministic A* komşulukları aynı road edge'lerinden türetilir; colonist rotaları habitat girişinden hedef facility girişine kadar yalnız bu graph üzerinde ilerler.
+- AssetRegistry `targetFootprint`, `entrancePoint` ve `workPoint` metadata'sı yerleşim ile geometrik doğrulamada gerçek girdi olarak kullanıldı. `segmentIntersectsFootprint` ile hiçbir road/path segmentinin yasak facility alanını kesmediği test edildi.
+- Indoor `Working` sunumunda kolonist facility girişine ulaştığında gizlenir; çalışma sonunda aynı girişten yol ağına döner. Maintenance work-point sunumları dışarıda kalır.
+- Overview kamera panel açıkken 40, kapalıyken 46 orthographic zoom kullanır; sabit 3/4 açı korunurken koloni world viewport'un yaklaşık %60–75 hedef aralığına taşındı.
+- Ground, üç yoğunluk bölgesi, road-derived street lights, daha okunur astronot ölçeği ve azaltılmış debug-benzeri facility beacon efektleriyle yaşayan kompakt diorama kompozisyonu güçlendirildi.
+- Prototype kontrol paneli açılıp kapanabilir hale getirildi; açık durum Safe Viewport doğrulamasını korur.
+
+### Doğrulama
+
+- Lint: PASS
+- Typecheck: PASS
+- Test: PASS — 10 test dosyası, 32 test
+- Production build: PASS — yalnız mevcut büyük bundle/chunk uyarısı sürüyor
+- Desktop 15 kolonist: PASS — iki tam 16 saniyelik çevrim izlendi
+- Desktop 50 kolonist: PASS — görünür rota ve performans stres gözlemi yapıldı
+- Gündüz/gece, kar/sis açık-kapalı, panel açık-kapalı, overview/reactor/mine/habitat odakları: PASS
+- High/15 gece gözlemi: yaklaşık 144 FPS, 6.9 ms, 125 draw, 141718 triangle, 33 geometry, 46 texture, 12 light, 480 particle
+- High/50 gece gözlemi: yaklaşık 126–131 FPS, 7.6–7.9 ms, 183–187 draw, 391292–408504 triangle, 33 geometry, 78–82 texture, 12 light, 480 particle
+
+### Kapsam sınırı
+
+- Simulation Core, gameplay pathfinding, Workforce, gerçek facility state machine, resource ledger, Protocol runtime/editor ve Faz 2 HUD uygulanmadı.
+- Commit veya push yapılmadı; kullanıcı talimatı bekleniyor.

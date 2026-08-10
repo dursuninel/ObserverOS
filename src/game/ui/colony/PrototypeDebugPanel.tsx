@@ -5,14 +5,18 @@ import type { PrototypeDebugState, WorldMetrics } from '../../world/prototype/ty
 interface PrototypeDebugPanelProps {
   readonly metrics: WorldMetrics;
   readonly onChange: (state: PrototypeDebugState) => void;
+  readonly onToggle: () => void;
+  readonly open: boolean;
   readonly state: PrototypeDebugState;
 }
 
-export function PrototypeDebugPanel({ metrics, onChange, state }: PrototypeDebugPanelProps) {
+export function PrototypeDebugPanel({ metrics, onChange, onToggle, open, state }: PrototypeDebugPanelProps) {
   const { t } = useTranslation();
   const set = <Key extends keyof PrototypeDebugState>(key: Key, value: PrototypeDebugState[Key]) => onChange({ ...state, [key]: value });
   return (
-    <aside aria-label={t('prototype.debug.title')} className="prototype-debug-panel">
+    <aside aria-label={t('prototype.debug.title')} className={`prototype-debug-panel${open ? '' : ' collapsed'}`}>
+      <button aria-expanded={open} className="debug-panel-toggle" onClick={onToggle} type="button">{open ? t('prototype.debug.hide') : t('prototype.debug.show')}</button>
+      {open && <>
       <div className="debug-panel-heading"><span>{t('prototype.debug.title')}</span><span className="prototype-badge">PHASE 1</span></div>
       <label>{t('prototype.debug.time')}<input max="1" min="0" onChange={(event) => set('timeOfDay', Number(event.target.value))} step="0.01" type="range" value={state.timeOfDay} /></label>
       <div className="debug-toggle-row">
@@ -28,6 +32,7 @@ export function PrototypeDebugPanel({ metrics, onChange, state }: PrototypeDebug
       <dl className="performance-grid">
         <div><dt>FPS</dt><dd>{metrics.fps}</dd></div><div><dt>ms</dt><dd>{metrics.frameTimeMs}</dd></div><div><dt>Draw</dt><dd>{metrics.drawCalls}</dd></div><div><dt>Tri</dt><dd>{metrics.triangleCount}</dd></div><div><dt>Geo</dt><dd>{metrics.geometryCount}</dd></div><div><dt>Tex</dt><dd>{metrics.textureCount}</dd></div><div><dt>Light</dt><dd>{metrics.lightCount}</dd></div><div><dt>Particles</dt><dd>{metrics.particleCount}</dd></div>
       </dl>
+      </>}
     </aside>
   );
 }

@@ -1,48 +1,31 @@
-export type NavNodeId = 'center' | 'reactor' | 'solar' | 'battery' | 'mine' | 'habitat' | 'oxygen' | 'expansion';
+import { getRoadNeighbors, getRoadNode, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
 
-export interface NavNode {
-  readonly id: NavNodeId;
-  readonly neighbors: readonly NavNodeId[];
-  readonly position: readonly [number, number, number];
-}
+const distance = (left: Point2, right: Point2): number => Math.hypot(left[0] - right[0], left[1] - right[1]);
 
-export const NAV_GRAPH: Readonly<Record<NavNodeId, NavNode>> = {
-  center: { id: 'center', position: [0, 0.32, 0], neighbors: ['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen', 'expansion'] },
-  reactor: { id: 'reactor', position: [-5, 0.32, -0.1], neighbors: ['center', 'habitat'] },
-  solar: { id: 'solar', position: [-10, 0.32, 2.7], neighbors: ['center', 'battery'] },
-  battery: { id: 'battery', position: [-1, 0.32, 2.9], neighbors: ['center', 'solar', 'oxygen'] },
-  mine: { id: 'mine', position: [9, 0.32, -2.7], neighbors: ['center', 'habitat'] },
-  habitat: { id: 'habitat', position: [3, 0.32, -1.7], neighbors: ['center', 'reactor', 'mine'] },
-  oxygen: { id: 'oxygen', position: [8, 0.32, 2], neighbors: ['center', 'battery', 'expansion'] },
-  expansion: { id: 'expansion', position: [13, 0.32, 5], neighbors: ['center', 'oxygen'] },
-};
-
-const distance = (a: NavNode, b: NavNode): number => Math.hypot(a.position[0] - b.position[0], a.position[2] - b.position[2]);
-
-export function findPath(start: NavNodeId, goal: NavNodeId): readonly NavNodeId[] {
-  const open = new Set<NavNodeId>([start]);
-  const cameFrom = new Map<NavNodeId, NavNodeId>();
-  const gScore = new Map<NavNodeId, number>([[start, 0]]);
+export function findPath(start: string, goal: string): readonly string[] {
+  const open = new Set<string>([start]);
+  const cameFrom = new Map<string, string>();
+  const gScore = new Map<string, number>([[start, 0]]);
 
   while (open.size > 0) {
     const current = [...open].sort((left, right) => {
-      const leftScore = (gScore.get(left) ?? Number.POSITIVE_INFINITY) + distance(NAV_GRAPH[left], NAV_GRAPH[goal]);
-      const rightScore = (gScore.get(right) ?? Number.POSITIVE_INFINITY) + distance(NAV_GRAPH[right], NAV_GRAPH[goal]);
+      const leftScore = (gScore.get(left) ?? Number.POSITIVE_INFINITY) + distance(getRoadNode(left).position, getRoadNode(goal).position);
+      const rightScore = (gScore.get(right) ?? Number.POSITIVE_INFINITY) + distance(getRoadNode(right).position, getRoadNode(goal).position);
       return leftScore - rightScore || left.localeCompare(right);
     })[0];
     if (!current) break;
     if (current === goal) {
-      const path: NavNodeId[] = [current];
+      const path = [current];
       let cursor = current;
       while (cameFrom.has(cursor)) {
-        cursor = cameFrom.get(cursor) as NavNodeId;
+        cursor = cameFrom.get(cursor) as string;
         path.unshift(cursor);
       }
       return path;
     }
     open.delete(current);
-    for (const neighbor of NAV_GRAPH[current].neighbors) {
-      const tentative = (gScore.get(current) ?? 0) + distance(NAV_GRAPH[current], NAV_GRAPH[neighbor]);
+    for (const neighbor of getRoadNeighbors(current)) {
+      const tentative = (gScore.get(current) ?? 0) + distance(getRoadNode(current).position, getRoadNode(neighbor).position);
       if (tentative < (gScore.get(neighbor) ?? Number.POSITIVE_INFINITY)) {
         cameFrom.set(neighbor, current);
         gScore.set(neighbor, tentative);
@@ -60,34 +43,51 @@ export interface ColonistPose {
   readonly position: readonly [number, number, number];
   readonly rotationY: number;
   readonly state: ColonistPresentationState;
+  readonly visible: boolean;
 }
 
-const destinations: readonly NavNodeId[] = ['reactor', 'solar', 'battery', 'mine', 'oxygen', 'expansion'];
+const destinations = ['reactor', 'solar', 'battery', 'mine', 'oxygen'] as const;
 
-function interpolatePath(path: readonly NavNodeId[], progress: number, state: 'walking-to-facility' | 'walking-to-habitat'): ColonistPose {
+function nodePosition(id: string): readonly [number, number, number] {
+  const [x, z] = getRoadNode(id).position;
+  return [x, 0.32, z];
+}
+
+function interpolatePath(path: readonly string[], progress: number, state: 'walking-to-facility' | 'walking-to-habitat', laneOffset: number): ColonistPose {
   const segmentProgress = progress * Math.max(1, path.length - 1);
   const segment = Math.min(path.length - 2, Math.floor(segmentProgress));
-  const from = NAV_GRAPH[path[Math.max(0, segment)] ?? 'habitat'].position;
-  const to = NAV_GRAPH[path[Math.max(0, segment + 1)] ?? 'center'].position;
+  const from = nodePosition(path[Math.max(0, segment)] ?? 'habitat-entrance');
+  const to = nodePosition(path[Math.max(0, segment + 1)] ?? 'habitat-entrance');
   const local = segmentProgress - segment;
   const x = from[0] + (to[0] - from[0]) * local;
   const z = from[2] + (to[2] - from[2]) * local;
-  return { animation: 'Walk', position: [x, from[1], z], rotationY: Math.atan2(to[0] - from[0], to[2] - from[2]), state };
+  const length = Math.max(0.001, Math.hypot(to[0] - from[0], to[2] - from[2]));
+  const lateralX = -(to[2] - from[2]) / length * laneOffset;
+  const lateralZ = (to[0] - from[0]) / length * laneOffset;
+  return { animation: 'Walk', position: [x + lateralX, from[1], z + lateralZ], rotationY: Math.atan2(to[0] - from[0], to[2] - from[2]), state, visible: true };
 }
 
 export function getColonistPose(index: number, elapsedSeconds: number): ColonistPose {
-  const destination = destinations[index % destinations.length] ?? 'habitat';
-  const outbound = findPath('habitat', destination);
+  const destination = destinations[index % destinations.length] ?? 'reactor';
+  const startNode = 'habitat-entrance';
+  const destinationNode = `${destination}-entrance`;
+  const outbound = findPath(startNode, destinationNode);
   const inbound = [...outbound].reverse();
   const cycle = (elapsedSeconds + index * 1.37) % 16;
+  const laneOffset = ((index % 5) - 2) * 0.12;
+  const habitatEntrance = nodePosition(startNode);
   if (cycle < 2) {
-    return { animation: 'Idle', position: NAV_GRAPH.habitat.position, rotationY: 0, state: 'resting' };
+    return { animation: 'Idle', position: [habitatEntrance[0] + laneOffset, habitatEntrance[1], habitatEntrance[2] - 0.35], rotationY: 0, state: 'resting', visible: true };
   }
   if (cycle < 2.5) {
-    return { animation: 'Idle', position: NAV_GRAPH.habitat.position, rotationY: 0, state: 'assigned' };
+    return { animation: 'Idle', position: habitatEntrance, rotationY: 0, state: 'assigned', visible: true };
   }
-  if (cycle < 7.5) return interpolatePath(outbound, (cycle - 2.5) / 5, 'walking-to-facility');
-  if (cycle < 10) return { animation: 'Weapon', position: NAV_GRAPH[destination].position, rotationY: Math.PI, state: 'working' };
-  if (cycle < 15) return interpolatePath(inbound, (cycle - 10) / 5, 'walking-to-habitat');
-  return { animation: 'Idle', position: NAV_GRAPH.habitat.position, rotationY: 0, state: 'resting' };
+  if (cycle < 7.5) return interpolatePath(outbound, (cycle - 2.5) / 5, 'walking-to-facility', laneOffset);
+  if (cycle < 10) return { animation: 'Weapon', position: nodePosition(destinationNode), rotationY: Math.PI, state: 'working', visible: false };
+  if (cycle < 15) return interpolatePath(inbound, (cycle - 10) / 5, 'walking-to-habitat', laneOffset);
+  return { animation: 'Idle', position: habitatEntrance, rotationY: 0, state: 'resting', visible: true };
+}
+
+export function allRoadNodeIds(): readonly string[] {
+  return PROTOTYPE_LAYOUT.roadNodes.map((node) => node.id);
 }

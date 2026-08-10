@@ -8,7 +8,7 @@ export const tr = {
   },
   prototype: {
     worldStatus: 'GÖRSEL PROTOTİP ÇEVRİMİ',
-    debug: { title: 'PROTOTİP KONTROLLERİ', time: 'Günün zamanı', snow: 'Kar', fog: 'Sis', reactor: 'Reaktör durumu', mine: 'Maden durumu', colonists: 'Kolonici sayısı', camera: 'Kamera odağı', quality: 'Kalite profili', safeAreas: 'Güvenli alan maskeleri' },
+    debug: { title: 'PROTOTİP KONTROLLERİ', hide: 'Paneli gizle', show: 'Kontrolleri göster', time: 'Günün zamanı', snow: 'Kar', fog: 'Sis', reactor: 'Reaktör durumu', mine: 'Maden durumu', colonists: 'Kolonici sayısı', camera: 'Kamera odağı', quality: 'Kalite profili', safeAreas: 'Güvenli alan maskeleri' },
     states: { normal: 'Normal', boost: 'Boost', interlocked: 'Güvenlik kilidinde', maintenance: 'Bakımda', working: 'Çalışıyor', offline: 'Çevrimdışı' },
     camera: { overview: 'Genel görünüm', reactor: 'Reaktör', mine: 'Maden', habitat: 'Habitat' },
     quality: { low: 'Düşük', medium: 'Orta', high: 'Yüksek' },
