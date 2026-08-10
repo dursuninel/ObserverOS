@@ -143,7 +143,7 @@ describe('continuous authoritative motion presentation', () => {
     motion.observe(onSite);
     const positions = [0, 0.1, 0.1, 0.1, 0.1, 0.1].map((delta) => getAuthoritativeColonistPose(motion.advance(delta, fixedStepSeconds)).position);
     expect(positions.at(-1)).toEqual(getAuthoritativeColonistPose(onSite).position);
-    expect(getAuthoritativeColonistPose(motion.sample())).toMatchObject({ activity: true, animation: 'Idle', visible: true });
+    expect(getAuthoritativeColonistPose(motion.sample())).toMatchObject({ activity: true, animation: 'Idle', visible: false });
   });
 
   it('uses shortest-angle facing interpolation and freezes rotation on Pause', () => {

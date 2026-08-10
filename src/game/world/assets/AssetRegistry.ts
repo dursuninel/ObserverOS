@@ -12,6 +12,7 @@ export interface AssetTransform {
 
 export interface AssetDefinition {
   readonly animationClips?: readonly string[];
+  readonly castShadow?: boolean;
   readonly hiddenNodeNames?: readonly string[];
   readonly id: string;
   readonly materialProfile?: {

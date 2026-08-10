@@ -669,3 +669,33 @@ VISIBLE WEAPON/PISTOL OBSERVED: NO
 MYSTERIOUS OBJECT UNDER CHARACTER OBSERVED: NO
 
 FAZ 3 TEST 4 KULLANICI İNCELEMESİ İÇİN HAZIR
+
+---
+
+## Faz 3 — Test 5 / Idle Presentation Cleanup + Object Forensics + Turkish DEV UI
+
+**Durum:** Kullanıcı incelemesine hazır
+**Tarih:** 10 Ağustos 2026
+**Branch:** `phase-3-workforce-maintenance`
+
+### Genel özet
+
+- `authoritativeColonistPresentation.ts` içindeki `assignment === null → habitatPose()` akışının Available/Resting kolonicileri sabit Habitat rest point'lerinde görünür tuttuğu doğrulandı. Authoritative state ve diagnostic sayıları korunarak bu interior durumların world modeli gizlendi.
+- Gerçek travel ve maintenance travel görünür kaldı. Operation on-site modeli interior olarak gizli kalır. On-site maintenance için uygun repair clip bulunmadığından astronaut modeli gizlendi; ayrı sparks/service-light activity presentation'ı korunarak T/bind-pose işaretçisi kullanılmadı.
+- DEV-only object inspector visible mesh tıklamasından object/node, parent, ancestor chain, runtime asset ID, source pack ve world position çözer. RuntimeAsset root'ları provenance metadata'sı taşır; araç varsayılan kapalı ve yalnız DEV panelindedir.
+- Zemin artığı iki bileşene ayrıldı. Gerçek geometry `floor-light` / node `Prop_Light_Floor` / mesh `Plane.152`, Quaternius Modular `Prop_Light_Floor.gltf` kaynağıydı. Habitat instance'ları `[1.10, 0.20, -1.20]`, `[2.70, 0.20, -0.90]`, `[4.20, 0.20, -1.25]` konumlarındaydı; Habitat ve yol placement'ları kaldırıldı.
+- Büyük koyu X ayrıca `street-light` / node `lights` / mesh `Cube.15107` gölgesiydi. Habitat yaklaşımındaki caster `[2.40, 0.18, -0.75]` çevresindeydi. Asset-level `castShadow: false` metadata override ile gereksiz X gölgesi kaldırıldı; lambanın kendisi ve gece ışığı korundu.
+- `/colony` prototype controls, performance labels, diagnostic labels, enum display değerleri, maintenance lifecycle, butonlar, kaynaklar, rotalar ve komut sonuçları i18n `tr.ts` üzerinden Türkçeleştirildi. Domain enum/string değerleri değiştirilmedi.
+- İki dakikalık ×1 teknik gözlemde `Müsait 1–3`, `Dinleniyor 0–2`, `Yolda 0` durumlarında dışarıda sabit manken görülmedi. Gerçek reassignment travel başladığında yalnız authoritative traveler görünür oldu. Bu teknik gözlemdir; son görsel acceptance kullanıcıya aittir.
+
+### Doğrulama
+
+- Lint: PASS — 0 hata, 0 uyarı.
+- Typecheck: PASS.
+- Simulation-only typecheck: PASS.
+- Full test: PASS — 23 dosya, 173 test.
+- Production build: PASS — yalnız mevcut 500 kB chunk-size uyarısı sürüyor.
+- `git diff --check`: PASS — yalnız Windows LF/CRLF bilgilendirme uyarıları var.
+- Yeni dependency eklenmedi; Faz 4 kapsamına girilmedi; commit veya push yapılmadı.
+
+FAZ 3 TEST 5 KULLANICI İNCELEMESİ İÇİN HAZIR

@@ -64,7 +64,7 @@ function habitatPose(colonist: ColonistState): AuthoritativeColonistPose {
   const index = stableIndex(colonist.id);
   const points = getHabitatPresentationPoints().restPoints;
   const point = points[index % points.length] ?? getFacilityPlacement('habitat').position;
-  return { activity: false, animation: 'Idle', position: toWorld(point), rotationY: index * 0.71 % (Math.PI * 2), visible: true };
+  return { activity: false, animation: 'Idle', position: toWorld(point), rotationY: index * 0.71 % (Math.PI * 2), visible: false };
 }
 
 export function getAuthoritativeColonistPose(colonist: ColonistState): AuthoritativeColonistPose {
@@ -94,7 +94,7 @@ export function getAuthoritativeColonistPose(colonist: ColonistState): Authorita
     if (assignment.taskType === 'maintenance') {
       const point = getFacilityWorkPoint(target);
       const facility = getFacilityPlacement(target).position;
-      return { activity: true, animation: 'Idle', position: toWorld(point), rotationY: Math.atan2(facility[0] - point[0], facility[1] - point[1]), visible: true };
+      return { activity: true, animation: 'Idle', position: toWorld(point), rotationY: Math.atan2(facility[0] - point[0], facility[1] - point[1]), visible: false };
     }
     const entrance = getRoadNode(`${target}-entrance`).position;
     return { activity: false, animation: 'Idle', position: toWorld(entrance), rotationY: Math.PI, visible: false };

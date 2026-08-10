@@ -16,6 +16,7 @@ export interface WorldMetrics {
 export interface PrototypeDebugState {
   readonly cameraPreset: CameraPreset;
   readonly fogEnabled: boolean;
+  readonly objectInspectorEnabled: boolean;
   readonly quality: QualityProfileId;
   readonly safeAreasVisible: boolean;
   readonly snowEnabled: boolean;

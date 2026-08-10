@@ -8,7 +8,7 @@ export function normalizeAssetMaterials(root: Object3D, asset: AssetDefinition):
     if (hiddenNodeNames.has(node.name)) node.visible = false;
     if (!(node instanceof Mesh)) return;
     const mesh = node as Mesh<BufferGeometry, Material | Material[]>;
-    mesh.castShadow = asset.shadowProfile !== 'ground';
+    mesh.castShadow = asset.castShadow ?? asset.shadowProfile !== 'ground';
     mesh.receiveShadow = true;
     const currentMaterial = mesh.material;
     const usesMaterialArray = Array.isArray(currentMaterial);
