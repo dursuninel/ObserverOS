@@ -17,7 +17,10 @@ export function scoreGeneratedLayout(layout: GeneratedPlanetLayout): LayoutScore
   const safetySeparation = clamp((d(habitat, mine) - 6) * 1.2 + (d(habitat, reactor) - 5) * 0.9);
   const totalRoad = layout.roads.reduce((sum, road) => sum + roadLength(road.points), 0);
   const turns = layout.roads.reduce((sum, road) => sum + Math.max(0, road.points.length - 2), 0);
-  const roadQuality = clamp(10 - Math.max(0, totalRoad - 58) * 0.1 - turns * 0.2);
+  // Calibrated against the procedural generator's actual road distribution (total length p10..p90
+  // ~82..112, turns p10..p90 ~17..27). Free allowances sit at the p10 marks so the metric keeps
+  // discriminating across the realistic range instead of clamping every candidate to zero.
+  const roadQuality = clamp(10 - Math.max(0, totalRoad - 82) * 0.09 - Math.max(0, turns - 14) * 0.22);
   const boundsArea = (layout.cameraBounds.maxX - layout.cameraBounds.minX) * (layout.cameraBounds.maxZ - layout.cameraBounds.minZ);
   const compactness = clamp(10 - Math.max(0, boundsArea - 380) / 45);
   const visualComposition = clamp(10 - Math.abs((habitat?.position[0] ?? 0) - layout.cameraBounds.center[0]) * 0.35 - Math.abs((mine?.position[0] ?? 0) - (solar?.position[0] ?? 0) - 17) * 0.18);

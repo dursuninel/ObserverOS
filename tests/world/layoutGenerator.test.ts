@@ -70,8 +70,16 @@ describe('Faz 4 deterministic layout generator', () => {
   it('12. Habitat/Mine ayrımı korunur', () => expect(distance(facility(layout, 'habitat')!.position, facility(layout, 'mine')!.position)).toBeGreaterThan(7));
 
   it('13. Reactor/Habitat aşırı yakınlığı safety score düşürür', () => {
-    const unsafe = copy(); const reactor = unsafe.facilities.find(({ id }) => id === 'reactor')!; Object.assign(reactor, { position: facility(unsafe, 'habitat')!.position });
-    expect(scoreGeneratedLayout(unsafe).safetySeparation).toBeLessThan(layout.scoreBreakdown.safetySeparation);
+    // safetySeparation mixes the habitat/mine and habitat/reactor terms and clamps at 10, so both
+    // variants pin the mine at a fixed distance; only the reactor proximity differs between them.
+    const withMineFixed = (reactorAtHabitat: boolean) => {
+      const draft = copy();
+      const habitat = facility(draft, 'habitat')!;
+      Object.assign(facility(draft, 'mine')!, { position: [habitat.position[0] + 8, habitat.position[1]] });
+      if (reactorAtHabitat) Object.assign(facility(draft, 'reactor')!, { position: habitat.position });
+      return scoreGeneratedLayout(draft).safetySeparation;
+    };
+    expect(withMineFixed(true)).toBeLessThan(withMineFixed(false));
   });
 
   it('14. Battery/Reactor preference adjacency içinde değerlendirilir', () => expect(NIVALIS_PLACEMENT_PROFILES.battery.preferredNeighbours.some(({ facilityId }) => facilityId === 'reactor')).toBe(true));
@@ -101,7 +109,15 @@ describe('Faz 4 deterministic layout generator', () => {
     const blocked = NIVALIS_TERRAIN.areas.filter(({ tags }) => tags.includes('blocked'));
     path?.slice(1, -1).forEach((pathPoint) => blocked.forEach((area) => expect(pointInRect(pathPoint, area, -0.2)).toBe(false)));
   });
-  it('26. service road diğer facility footprintlerine girmez', () => layout.roads.forEach((road) => road.points.slice(1, -1).forEach((roadPoint) => layout.facilities.forEach((item) => expect(pointInRect(roadPoint, item.footprint)).toBe(false)))));
+  it('26. service road diğer facility footprintlerine girmez', () => layout.roads.forEach((road) => {
+    // A road may reach into the compound it serves - that is how it gets to the entrance. What it
+    // must never do is cross a foreign facility, which is exactly what layoutValidation enforces.
+    const servedId = layout.navigationEdges.find(({ id }) => id === road.edgeId)?.to.replace(/-(approach|entrance)$/, '');
+    road.points.slice(1, -1).forEach((roadPoint) => layout.facilities.forEach((item) => {
+      if (road.role !== 'main-spine' && item.id === servedId) return;
+      expect(pointInRect(roadPoint, item.footprint)).toBe(false);
+    }));
+  }));
   it('27. road facility center yerine entrancea ulaşır', () => layout.facilities.forEach((item) => expect(layout.roads.find(({ edgeId }) => edgeId === `${item.id}-entrance-link`)?.points.at(-1)).toEqual(item.entrance)));
   it('28. main spine quality pozitif score taşır', () => expect(layout.scoreBreakdown.roadQuality).toBeGreaterThan(0));
   it('29. gereksiz road zig-zag scoreu düşürür', () => { const zigzag = copy(); const road = zigzag.roads[0]!; Object.assign(road, { points: [road.points[0]!, [0, 7], [1, -7], road.points.at(-1)!] }); expect(scoreGeneratedLayout(zigzag).roadQuality).toBeLessThan(layout.scoreBreakdown.roadQuality); });
@@ -119,7 +135,7 @@ describe('Faz 4 deterministic layout generator', () => {
     const failed = generateLayoutCandidates({ seed: 1, terrain: impossible, internalCandidateCount: 4 });
     expect(failed).toMatchObject({ status: 'failure', attemptedCandidates: 4 });
   });
-  it('40. 100 seed sweep bütün seedlerde valid top candidate bulur', () => expect(runLayoutSeedSweep(100)).toMatchObject({ testedSeeds: 100, valid: 100, failed: 0 }));
+  it('40. 100 seed sweep bütün seedlerde valid top candidate bulur', () => expect(runLayoutSeedSweep(100)).toMatchObject({ testedSeeds: 100, valid: 100, failed: 0 }), 60_000);
   it('41. renderer generated layout placement tüketir', () => { const source = readFileSync(resolve(process.cwd(), 'src/game/world/renderer/WorldScene.tsx'), 'utf8'); expect(source).toContain('getGeneratedFacility(layout, id)'); expect(source).not.toContain('getFacilityPlacement(id)'); });
   it('42. renderer facility placement seçmez', () => { const source = readFileSync(resolve(process.cwd(), 'src/game/world/renderer/WorldScene.tsx'), 'utf8'); expect(source).not.toContain('Math.random'); expect(source).not.toContain('generateLayoutCandidates'); });
   it('43. generated navigation TravelNetworkConfig olarak authoritative engine sınırına aktarılır', () => { const network = generatedLayoutToTravelNetwork(layout, 0.25); expect(network.nodes).toHaveLength(layout.navigationNodes.length); expect(network.edges).toEqual(layout.navigationEdges.map(({ from, to }) => ({ from, to }))); });

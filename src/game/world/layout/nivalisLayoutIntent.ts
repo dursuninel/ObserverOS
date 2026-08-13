@@ -1,7 +1,7 @@
 import type { FacilityId } from '../prototype/types';
 import type { LayoutStyle, PlacementProfile, TerrainDefinition } from './layoutTypes';
 
-export const GENERATOR_VERSION = '4.2.0';
+export const GENERATOR_VERSION = '5.0.0';
 export const INTERNAL_CANDIDATE_COUNT = 50;
 export const VISUAL_CANDIDATE_COUNT = 5;
 

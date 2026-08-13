@@ -26,7 +26,6 @@ describe('Seed regeneration diversity: ADAY A across sequential seeds', () => {
       const junctionCount = candidate.structure.junctionCount;
       const orientation = candidate.structure.mainSpineOrientation;
       const roadCount = candidate.roads.filter(r => r.role === 'main-spine').length;
-      const facilityCount = candidate.facilities.length;
 
       adayAMetrics.push({
         seed,
