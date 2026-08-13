@@ -89,7 +89,7 @@ export const NIVALIS_LAYOUT_INTENT: NivalisLayoutIntent = {
  * (ölçülen: plato 0.85 kat → 60/60 seed `structural-generation-failed`).
  * Değiştirdikten sonra `runLayoutSeedSweep` koş, failed === 0 olduğunu doğrula.
  */
-export const NIVALIS_ANCHOR_SPREAD = 0.44;
+export const NIVALIS_ANCHOR_SPREAD = 0.33;
 
 /**
  * Bölge merkezleri çapa yayılımıyla birlikte içeri kayar, GENİŞLİKLERİ kaymaz.

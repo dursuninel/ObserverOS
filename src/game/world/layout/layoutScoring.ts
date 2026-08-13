@@ -27,7 +27,7 @@ export function scoreGeneratedLayout(layout: GeneratedPlanetLayout): LayoutScore
   // Faz 3 sabit yerleşiminin alanına göre seçilmişti; üretilen adaylar 820..1220 aralığında
   // olduğu için metrik HER adayda 0'a kırpılıyor ve seçime hiç katkı vermiyordu — yani
   // jeneratörün derli toplu olma baskısı yoktu. Aralık gerçek dağılıma taşındı.
-  const compactness = clamp(10 - Math.max(0, boundsArea - 700) / 40);
+  const compactness = clamp(10 - Math.max(0, boundsArea - 560) / 38);
   const visualComposition = clamp(10 - Math.abs((habitat?.position[0] ?? 0) - layout.cameraBounds.center[0]) * 0.35 - Math.abs((mine?.position[0] ?? 0) - (solar?.position[0] ?? 0) - 17) * 0.18);
   const expansion = layout.expansionSlots[0];
   const expansionAccess = clamp(expansion ? 10 - Math.abs(expansion.position[0] - (mine?.position[0] ?? 0)) * 0.25 : 0);
