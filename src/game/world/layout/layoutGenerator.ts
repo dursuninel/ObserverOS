@@ -18,6 +18,7 @@ import { validateGeneratedLayout } from './layoutValidation';
 import {
   GENERATOR_VERSION,
   INTERNAL_CANDIDATE_COUNT,
+  NIVALIS_ANCHOR_SPREAD,
   NIVALIS_FACILITY_ASSETS,
   NIVALIS_LAYOUT_INTENT,
   NIVALIS_PLACEMENT_PROFILES,
@@ -67,7 +68,7 @@ export interface GenerateLayoutOptions {
 }
 
 function normalizedToWorld(normalized: Point2, terrain: TerrainDefinition): Point2 {
-  return point(terrain.bounds.center[0] + normalized[0] * terrain.bounds.width * 0.47, terrain.bounds.center[1] + normalized[1] * terrain.bounds.depth * 0.47);
+  return point(terrain.bounds.center[0] + normalized[0] * terrain.bounds.width * NIVALIS_ANCHOR_SPREAD, terrain.bounds.center[1] + normalized[1] * terrain.bounds.depth * NIVALIS_ANCHOR_SPREAD);
 }
 
 function rotatedAabb(width: number, depth: number, rotationY: number): { readonly depth: number; readonly width: number } {
