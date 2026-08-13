@@ -299,7 +299,7 @@ function buildCandidate(seed: number, candidateIndex: number, style: LayoutStyle
   return { ...draft, scoreBreakdown, score: totalLayoutScore(scoreBreakdown) };
 }
 
-function selectDiverseCandidates(valid: readonly GeneratedPlanetLayout[], count: number): readonly GeneratedPlanetLayout[] {
+function selectDiverseCandidates(valid: readonly GeneratedPlanetLayout[], count: number, seed: number): readonly GeneratedPlanetLayout[] {
   const bestByArchetype = new Map<StructuralArchetypeId, GeneratedPlanetLayout>();
   for (const candidate of valid) {
     const current = bestByArchetype.get(candidate.structure.archetype);
@@ -316,7 +316,11 @@ function selectDiverseCandidates(valid: readonly GeneratedPlanetLayout[], count:
     if (selected.some((existing) => existing.candidateId === candidate.candidateId)) continue;
     if (selected.every((existing) => calculateStructuralDifference(existing, candidate) >= DIVERSITY_THRESHOLD)) selected.push(candidate);
   }
-  return selected.sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId)).map((candidate, index) => ({ ...candidate, structure: { ...candidate.structure, differenceScore: index === 0 ? 1 : Math.min(...selected.sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId)).slice(0, index).map((other) => calculateStructuralDifference(other, candidate))) } }));
+  const scoreSorted = [...selected].sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId));
+  const withDifferenceScore = scoreSorted.map((candidate, index) => ({ ...candidate, structure: { ...candidate.structure, differenceScore: index === 0 ? 1 : Math.min(...scoreSorted.slice(0, index).map((other) => calculateStructuralDifference(other, candidate))) } }));
+  const rotation = hashSeed(seed) % withDifferenceScore.length;
+  const rotated = [...withDifferenceScore.slice(rotation), ...withDifferenceScore.slice(0, rotation)];
+  return rotated;
 }
 
 export function generateLayoutCandidates(options: GenerateLayoutOptions): LayoutGenerationResult {
@@ -334,7 +338,7 @@ export function generateLayoutCandidates(options: GenerateLayoutOptions): Layout
     if (validation.valid) valid.push(candidate); else validation.reasons.forEach((reason) => reasons.add(reason));
   }
   valid.sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId));
-  const candidates = selectDiverseCandidates(valid, visualCandidateCount);
+  const candidates = selectDiverseCandidates(valid, visualCandidateCount, seed);
   if (candidates.length < visualCandidateCount) return { status: 'failure', seed, attemptedCandidates: internalCandidateCount, reasons: [...reasons, `insufficient-diversity:${candidates.length}/${visualCandidateCount}`].sort() };
   return { status: 'success', seed, attemptedCandidates: internalCandidateCount, candidates };
 }
