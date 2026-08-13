@@ -111,6 +111,41 @@ describe('Faz 4 Test 2 structural layout generation', () => {
     if (other.status === 'success') expect(other.candidates.map((layout) => ({ signature: layout.structure.signature, positions: layout.facilities.map(({ position }) => position) }))).not.toEqual(candidates.map((layout) => ({ signature: layout.structure.signature, positions: layout.facilities.map(({ position }) => position) })));
   });
   it('25. 100-seed sweep her seedde en az üç structural signature doğrular', () => expect(runLayoutSeedSweep(100)).toMatchObject({ testedSeeds: 100, valid: 100, failed: 0, minimumStructuralSignatures: 3 }));
+
+  it('25b. aynı arketip farklı seedlerde birebir aynı koordinat üretmemeli', () => {
+    // Regression test: ensure same archetype across different seeds has different facility coordinates
+    const results = new Map<string, { seed: number; positions: Record<string, [number, number]> }>();
+
+    for (let seed = 60_000; seed < 60_050; seed += 1) {
+      const gen = generateLayoutCandidates({ seed, internalCandidateCount: 50 });
+      if (gen.status !== 'failure') {
+        for (const candidate of gen.candidates) {
+          const archId = candidate.structure.archetype;
+          const posMap: Record<string, [number, number]> = {};
+          candidate.facilities.forEach(f => {
+            posMap[f.id] = f.position;
+          });
+
+          const key = `${archId}`;
+          if (!results.has(key)) {
+            results.set(key, { seed, positions: posMap });
+          } else {
+            const prev = results.get(key)!;
+            // Check if coordinates are EXACTLY identical (Bug indicator)
+            const coordsIdentical = Object.keys(posMap).every(id => {
+              const p1 = posMap[id];
+              const p2 = prev.positions[id];
+              return p1 && p2 && p1[0] === p2[0] && p1[1] === p2[1];
+            });
+
+            if (coordsIdentical) {
+              throw new Error(`REGRESSION: Archetype "${archId}" seed ${prev.seed} and ${seed} produce identical coordinates`);
+            }
+          }
+        }
+      }
+    }
+  });
   it('26. mevcut road/nav connectivity korunur ve yollar compoundlardan geçmez', () => candidates.forEach((layout) => {
     expect(isNavigationConnected(layout)).toBe(true);
     expect(validateGeneratedLayout(layout, NIVALIS_TERRAIN).valid).toBe(true);

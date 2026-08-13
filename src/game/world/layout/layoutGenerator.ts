@@ -305,7 +305,7 @@ function selectDiverseCandidates(valid: readonly GeneratedPlanetLayout[], count:
     const current = bestByArchetype.get(candidate.structure.archetype);
     if (!current || candidate.score > current.score || candidate.score === current.score && candidate.candidateId.localeCompare(current.candidateId) < 0) bestByArchetype.set(candidate.structure.archetype, candidate);
   }
-  const representatives = [...bestByArchetype.values()].sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId));
+  const representatives = [...bestByArchetype.values()].sort((a, b) => a.structure.archetype.localeCompare(b.structure.archetype) || b.score - a.score);
   const selected: GeneratedPlanetLayout[] = [];
   for (const candidate of representatives) {
     if (selected.length >= count) break;
@@ -316,7 +316,7 @@ function selectDiverseCandidates(valid: readonly GeneratedPlanetLayout[], count:
     if (selected.some((existing) => existing.candidateId === candidate.candidateId)) continue;
     if (selected.every((existing) => calculateStructuralDifference(existing, candidate) >= DIVERSITY_THRESHOLD)) selected.push(candidate);
   }
-  return selected.map((candidate, index) => ({ ...candidate, structure: { ...candidate.structure, differenceScore: index === 0 ? 1 : Math.min(...selected.slice(0, index).map((other) => calculateStructuralDifference(other, candidate))) } }));
+  return selected.sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId)).map((candidate, index) => ({ ...candidate, structure: { ...candidate.structure, differenceScore: index === 0 ? 1 : Math.min(...selected.sort((a, b) => b.score - a.score || a.candidateId.localeCompare(b.candidateId)).slice(0, index).map((other) => calculateStructuralDifference(other, candidate))) } }));
 }
 
 export function generateLayoutCandidates(options: GenerateLayoutOptions): LayoutGenerationResult {
@@ -324,7 +324,7 @@ export function generateLayoutCandidates(options: GenerateLayoutOptions): Layout
   const style = options.style ?? NIVALIS_LAYOUT_INTENT.style;
   const terrain = options.terrain ?? NIVALIS_TERRAIN;
   const internalCandidateCount = Math.max(1, Math.min(50, Math.floor(options.internalCandidateCount ?? INTERNAL_CANDIDATE_COUNT)));
-  const visualCandidateCount = Math.max(1, Math.min(5, Math.floor(options.visualCandidateCount ?? VISUAL_CANDIDATE_COUNT)));
+  const visualCandidateCount = Math.max(1, Math.min(10, Math.floor(options.visualCandidateCount ?? VISUAL_CANDIDATE_COUNT)));
   const valid: GeneratedPlanetLayout[] = [];
   const reasons = new Set<string>();
   for (let index = 0; index < internalCandidateCount; index += 1) {
