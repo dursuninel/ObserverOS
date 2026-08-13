@@ -22,7 +22,7 @@ export function ColonyWorkspace() {
   const seedSweep = useMemo(() => import.meta.env.DEV ? runLayoutSeedSweep(100, layoutSeed) : null, [layoutSeed]);
   if (generation === null || seedSweep === null) return <section aria-labelledby="colony-heading" className="workspace"><h1 id="colony-heading">{t('workspace.colony.title')}</h1><p>{t('layoutReview.productionPending')}</p></section>;
   if (generation.status === 'failure') throw new Error(`Faz 4 layout generation failed: ${generation.reasons.join(', ')}`);
-  const selectedLayout = layoutMode === 'prototype' ? null : (generation.candidates[selectedCandidateIndex] ?? generation.candidates[0]);
+  const selectedLayout = layoutMode === 'prototype' ? null : (generation.candidates[selectedCandidateIndex] ?? generation.candidates[0] ?? null);
   if (layoutMode === 'generated' && !selectedLayout) throw new Error('Faz 4 layout generation returned no visual candidates.');
 
   const setCameraPreset = (cameraPreset: PrototypeDebugState['cameraPreset']) => {

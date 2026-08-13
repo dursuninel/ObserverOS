@@ -7,11 +7,11 @@ interface LayoutCandidatePanelProps {
   readonly candidates: readonly GeneratedPlanetLayout[];
   readonly onNewSeed: () => void;
   readonly onSelect: (index: number) => void;
-  readonly onSelectDefault?: () => void;
+  readonly onSelectDefault: () => void;
   readonly seedSweep: SeedSweepReport;
   readonly selectedIndex: number;
-  readonly showDefaultOption?: boolean;
-  readonly selectedMode?: 'generated' | 'prototype';
+  readonly showDefaultOption: boolean;
+  readonly selectedMode: 'generated' | 'prototype';
 }
 
 const candidateLetter = (index: number) => String.fromCharCode(65 + index);
@@ -20,6 +20,20 @@ export function LayoutCandidatePanel({ candidates, onNewSeed, onSelect, onSelect
   const { t } = useTranslation();
   const candidate = selectedMode === 'prototype' ? null : candidates[selectedIndex];
   if (selectedMode === 'generated' && !candidate) return null;
+  return <section aria-label={t('layoutReview.title')} className="layout-candidate-panel" data-testid="layout-candidate-panel">
+    <div className="layout-candidate-title"><strong>{t('layoutReview.title')}</strong><small>{selectedMode === 'prototype' ? t('layoutReview.defaultSelected') : t('layoutReview.notFrozen')}</small></div>
+    <div className="layout-candidate-buttons" role="tablist">
+      {showDefaultOption && <button aria-selected={selectedMode === 'prototype'} className={selectedMode === 'prototype' ? 'selected' : ''} onClick={onSelectDefault} role="tab" type="button">{t('layoutReview.default')}</button>}
+      {candidates.map((item, index) => <button aria-selected={selectedMode === 'generated' && selectedIndex === index} className={selectedMode === 'generated' && selectedIndex === index ? 'selected' : ''} key={item.candidateId} onClick={() => onSelect(index)} role="tab" type="button">{t('layoutReview.candidate', { letter: candidateLetter(index) })}</button>)}
+    </div>
+    {candidate && <CandidateScoreGrid candidate={candidate} />}
+    {selectedMode === 'generated' && <div className="layout-review-actions"><button disabled={selectedIndex === 0} onClick={() => onSelect(selectedIndex - 1)} type="button">{t('layoutReview.previous')}</button><button disabled={selectedIndex === candidates.length - 1} onClick={() => onSelect(selectedIndex + 1)} type="button">{t('layoutReview.next')}</button><button onClick={onNewSeed} type="button">{t('layoutReview.newSeed')}</button></div>}
+    {selectedMode === 'generated' && <details><summary>{t('layoutReview.seedSweep.title')}</summary><dl className="layout-score-grid"><div><dt>{t('layoutReview.seedSweep.tested')}</dt><dd>{seedSweep.testedSeeds}</dd></div><div><dt>{t('layoutReview.seedSweep.valid')}</dt><dd>{seedSweep.valid}</dd></div><div><dt>{t('layoutReview.seedSweep.failed')}</dt><dd>{seedSweep.failed}</dd></div><div><dt>{t('layoutReview.seedSweep.averageCandidates')}</dt><dd>{seedSweep.averageCandidateCount}</dd></div><div><dt>{t('layoutReview.seedSweep.averageSignatures')}</dt><dd>{seedSweep.averageStructuralSignatures}</dd></div><div><dt>{t('layoutReview.seedSweep.minimumSignatures')}</dt><dd>{seedSweep.minimumStructuralSignatures}</dd></div><div><dt>{t('layoutReview.seedSweep.highest')}</dt><dd>{seedSweep.highestScore.toFixed(2)}</dd></div><div><dt>{t('layoutReview.seedSweep.lowest')}</dt><dd>{seedSweep.lowestScore.toFixed(2)}</dd></div><div><dt>{t('layoutReview.seedSweep.averageMs')}</dt><dd>{seedSweep.averageGenerationMs} ms</dd></div></dl></details>}
+  </section>;
+}
+
+function CandidateScoreGrid({ candidate }: { readonly candidate: GeneratedPlanetLayout }) {
+  const { t } = useTranslation();
   const score = candidate.scoreBreakdown;
   const structure = candidate.structure;
   const translatedArchetype = t(`layoutReview.archetypes.${structure.archetype}`);
@@ -29,13 +43,7 @@ export function LayoutCandidatePanel({ candidates, onNewSeed, onSelect, onSelect
   const translatedOrientation = t(`layoutReview.orientations.${structure.mainSpineOrientation}`);
   const turnCount = structure.roadTurningPattern.filter((turn) => turn === 'corner').length;
   const translatedSignature = [translatedArchetype, translatedHabitat, translatedTerrain, translatedExpansion].join(' · ');
-  return <section aria-label={t('layoutReview.title')} className="layout-candidate-panel" data-testid="layout-candidate-panel">
-    <div className="layout-candidate-title"><strong>{t('layoutReview.title')}</strong><small>{selectedMode === 'prototype' ? t('layoutReview.defaultSelected') : t('layoutReview.notFrozen')}</small></div>
-    <div className="layout-candidate-buttons" role="tablist">
-      {showDefaultOption && <button aria-selected={selectedMode === 'prototype'} className={selectedMode === 'prototype' ? 'selected' : ''} onClick={onSelectDefault} role="tab" type="button">{t('layoutReview.default')}</button>}
-      {candidates.map((item, index) => <button aria-selected={selectedMode === 'generated' && selectedIndex === index} className={selectedMode === 'generated' && selectedIndex === index ? 'selected' : ''} key={item.candidateId} onClick={() => onSelect(index)} role="tab" type="button">{t('layoutReview.candidate', { letter: candidateLetter(index) })}</button>)}
-    </div>
-    {selectedMode !== 'prototype' && <dl className="layout-score-grid">
+  return <dl className="layout-score-grid">
       <div><dt>{t('layoutReview.seed')}</dt><dd>{candidate.seed}</dd></div>
       <div><dt>{t('layoutReview.profile')}</dt><dd>{t(`layoutReview.styles.${candidate.style}`)}</dd></div>
       <div><dt>{t('layoutReview.total')}</dt><dd>{candidate.score.toFixed(2)}</dd></div>
@@ -58,8 +66,5 @@ export function LayoutCandidatePanel({ candidates, onNewSeed, onSelect, onSelect
       <div><dt>{t('layoutReview.roadNetwork')}</dt><dd>{t('layoutReview.connected')}</dd></div>
       <div><dt>{t('layoutReview.navigation')}</dt><dd>{t('layoutReview.connected')}</dd></div>
       <div><dt>{t('layoutReview.valid')}</dt><dd>{t('layoutReview.yes')}</dd></div>
-    </dl>}
-    {selectedMode === 'generated' && <div className="layout-review-actions"><button disabled={selectedIndex === 0} onClick={() => onSelect(selectedIndex - 1)} type="button">{t('layoutReview.previous')}</button><button disabled={selectedIndex === candidates.length - 1} onClick={() => onSelect(selectedIndex + 1)} type="button">{t('layoutReview.next')}</button><button onClick={onNewSeed} type="button">{t('layoutReview.newSeed')}</button></div>}
-    {selectedMode === 'generated' && <details><summary>{t('layoutReview.seedSweep.title')}</summary><dl className="layout-score-grid"><div><dt>{t('layoutReview.seedSweep.tested')}</dt><dd>{seedSweep.testedSeeds}</dd></div><div><dt>{t('layoutReview.seedSweep.valid')}</dt><dd>{seedSweep.valid}</dd></div><div><dt>{t('layoutReview.seedSweep.failed')}</dt><dd>{seedSweep.failed}</dd></div><div><dt>{t('layoutReview.seedSweep.averageCandidates')}</dt><dd>{seedSweep.averageCandidateCount}</dd></div><div><dt>{t('layoutReview.seedSweep.averageSignatures')}</dt><dd>{seedSweep.averageStructuralSignatures}</dd></div><div><dt>{t('layoutReview.seedSweep.minimumSignatures')}</dt><dd>{seedSweep.minimumStructuralSignatures}</dd></div><div><dt>{t('layoutReview.seedSweep.highest')}</dt><dd>{seedSweep.highestScore.toFixed(2)}</dd></div><div><dt>{t('layoutReview.seedSweep.lowest')}</dt><dd>{seedSweep.lowestScore.toFixed(2)}</dd></div><div><dt>{t('layoutReview.seedSweep.averageMs')}</dt><dd>{seedSweep.averageGenerationMs} ms</dd></div></dl></details>}
-  </section>;
+    </dl>;
 }

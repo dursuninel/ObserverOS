@@ -119,7 +119,7 @@ export function getCameraZoomRange(viewportWidth: number, panelOpen: boolean): C
   return { min: 16, max: 72, overview: panelOpen ? 40 : 46, focus: 56 };
 }
 
-export function getLayoutOverviewZoom(viewportWidth: number, viewportHeight: number, panelOpen: boolean, bounds: CameraBounds): number {
+export function getLayoutOverviewZoom(viewportWidth: number, viewportHeight: number, panelOpen: boolean, bounds?: CameraBounds): number {
   const mobile = viewportWidth <= 720;
   const safeWidth = Math.max(1, viewportWidth - (!mobile && panelOpen ? 380 : 0));
   const safeHeight = Math.max(1, viewportHeight * (mobile && panelOpen ? 0.62 : 1));

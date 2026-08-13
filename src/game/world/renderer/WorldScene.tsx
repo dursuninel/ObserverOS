@@ -6,7 +6,7 @@ import { useSimulationSnapshot } from '../../../app/providers/simulationContext'
 import type { ColonistState } from '../../domain/workforce/Workforce';
 import type { SimulationSnapshot } from '../../simulation/SimulationSnapshot';
 import { requirePrototypeAsset } from '../assets/prototypeAssetRegistry';
-import { getGeneratedFacility, getGeneratedRoadTilePlacements } from '../layout/layoutQueries';
+import { getGeneratedExpansionPads, getGeneratedFacility, getGeneratedHazeAnchors, getGeneratedPlateauVertices, getGeneratedPropPlacements, getGeneratedRoadTilePlacements, getGeneratedStreetLights } from '../layout/layoutQueries';
 import type { GeneratedPlanetLayout } from '../layout/layoutTypes';
 import { getAuthoritativeColonistPose } from '../prototype/authoritativeColonistPresentation';
 import { getPrototypeCharacterAssetId } from '../prototype/navigation';
@@ -78,7 +78,7 @@ function FacilityActivity({ color, height, intensity, speed }: { readonly color:
   );
 }
 
-function Facility({ debugState, id, layout, simulationState }: { readonly debugState: PrototypeDebugState; readonly id: FacilityId; readonly layout: GeneratedPlanetLayout; readonly simulationState: SimulationSnapshot['facilities'][number] | undefined }) {
+function Facility({ debugState, id, layout, simulationState }: { readonly debugState: PrototypeDebugState; readonly id: FacilityId; readonly layout: GeneratedPlanetLayout | null; readonly simulationState: SimulationSnapshot['facilities'][number] | undefined }) {
   const placement = getGeneratedFacility(layout, id);
   const state = id === 'reactor'
     ? simulationState?.state === 'maintenance' ? 'maintenance' : simulationState?.state === 'failed' || simulationState?.state === 'interlocked' ? 'interlocked' : simulationState?.mode === 'boost' ? 'boost' : 'normal'
@@ -88,17 +88,18 @@ function Facility({ debugState, id, layout, simulationState }: { readonly debugS
   const signature = getFacilityVisualSignature(id, state, debugState.timeOfDay);
   const groupProps = { position: [placement.position[0], 0.18, placement.position[1]] as const, rotation: [0, placement.rotationY, 0] as const };
   const activityHeight: Readonly<Record<FacilityId, number>> = { reactor: 3.75, solar: 0.45, battery: 1.65, mine: 2.8, habitat: 1.15, oxygen: 1.55 };
-  return <group {...groupProps} userData={{ visualVariantId: placement.visualVariantId }}>
+  return <group {...groupProps} userData={placement.visualVariantId === null ? {} : { visualVariantId: placement.visualVariantId }}>
     <RuntimeAsset asset={requirePrototypeAsset(placement.primaryAssetId)} />
     {placement.visualModules.map((module, index) => <RuntimeAsset asset={requirePrototypeAsset(module.assetId)} key={`${module.semanticVisualRole}-${index}`} position={[module.localPosition[0], module.semanticVisualRole === 'plaza' ? -0.12 : 0, module.localPosition[1]]} rotationY={module.rotationY} scaleMultiplier={module.scale} />)}
     <FacilityActivity {...signature} height={activityHeight[id]} />
   </group>;
 }
 
-function StreetLights({ debugState, layout }: { readonly debugState: PrototypeDebugState; readonly layout: GeneratedPlanetLayout }) {
+function StreetLights({ debugState, layout }: { readonly debugState: PrototypeDebugState; readonly layout: GeneratedPlanetLayout | null }) {
   const quality = QUALITY_PROFILES[debugState.quality];
   const intensity = getLampIntensity(debugState.timeOfDay);
-  return <>{layout.streetLights.slice(0, quality.streetLights).map((light, index) => <group key={light.id}><RuntimeAsset asset={requirePrototypeAsset('street-light')} position={[light.position[0], 0.18, light.position[1]]} rotationY={index % 2 ? Math.PI : 0} />{intensity > 0 && <pointLight castShadow={index < 2 && quality.shadows} color="#ffb664" distance={4.5} intensity={intensity} position={[light.position[0], 1.85, light.position[1]]} />}</group>)}</>;
+  const lights = getGeneratedStreetLights(layout);
+  return <>{lights.slice(0, quality.streetLights).map((light, index) => <group key={light.id}><RuntimeAsset asset={requirePrototypeAsset('street-light')} position={[light.position[0], 0.18, light.position[1]]} rotationY={index % 2 ? Math.PI : 0} />{intensity > 0 && <pointLight castShadow={index < 2 && quality.shadows} color="#ffb664" distance={4.5} intensity={intensity} position={[light.position[0], 1.85, light.position[1]]} />}</group>)}</>;
 }
 
 function Snow({ count }: { readonly count: number }) {
@@ -114,13 +115,10 @@ function Snow({ count }: { readonly count: number }) {
   return <points><bufferGeometry><bufferAttribute ref={positionAttribute} attach="attributes-position" args={[field.positions, 3]} /></bufferGeometry><pointsMaterial color="#dce9ed" opacity={0.58} size={0.045} sizeAttenuation transparent depthWrite={false} /></points>;
 }
 
-function LocalFrozenHaze({ layout }: { readonly layout: GeneratedPlanetLayout }) {
+function LocalFrozenHaze({ layout }: { readonly layout: GeneratedPlanetLayout | null }) {
   const mist = useRef<import('three').Group>(null);
   const presentationClock = usePresentationClock();
-  const hazeAnchors = useMemo(() => {
-    const { minX, maxX, minZ, maxZ, center } = layout.cameraBounds;
-    return [[minX + 2, maxZ - 2], [minX + 5, minZ + 2], [center[0], maxZ - 1.5], [maxX - 5, minZ + 2], [maxX - 2, maxZ - 3]] as const;
-  }, [layout.cameraBounds]);
+  const hazeAnchors = useMemo(() => getGeneratedHazeAnchors(layout), [layout]);
   useFrame(() => {
     if (!mist.current) return;
     mist.current.children.forEach((child, index) => {
@@ -134,13 +132,13 @@ function LocalFrozenHaze({ layout }: { readonly layout: GeneratedPlanetLayout })
   return <group ref={mist}>{hazeAnchors.map(([x, z], index) => <mesh key={index} position={[x, 0.12 + index % 2 * 0.03, z]} rotation-x={-Math.PI / 2} scale={[1.8 + index % 3 * 0.35, 1.1, 1]}><circleGeometry args={[2.4, 14]} /><meshBasicMaterial color="#d4e2e5" depthWrite={false} opacity={0.035} transparent /></mesh>)}</group>;
 }
 
-function Colonist({ colonist, fixedStepPresentationSeconds, layout }: { readonly colonist: ColonistState; readonly fixedStepPresentationSeconds: number; readonly layout: GeneratedPlanetLayout }) {
+function Colonist({ colonist, fixedStepPresentationSeconds, layout }: { readonly colonist: ColonistState; readonly fixedStepPresentationSeconds: number; readonly layout: GeneratedPlanetLayout | null }) {
   const group = useRef<import('three').Group>(null);
   const character = useRef<import('three').Group>(null);
   const presentationClock = usePresentationClock();
   const [motion] = useState(() => new ColonistMotionInterpolator(colonist));
   useLayoutEffect(() => motion.observe(colonist), [colonist, motion]);
-  const initialPose = getAuthoritativeColonistPose(motion.sample(), layout);
+  const initialPose = getAuthoritativeColonistPose(motion.sample(), layout ?? undefined);
   const [animation, setAnimation] = useState(initialPose.animation);
   const [activity, setActivity] = useState(initialPose.activity);
   const activityRef = useRef(activity);
@@ -149,7 +147,7 @@ function Colonist({ colonist, fixedStepPresentationSeconds, layout }: { readonly
   useFrame(() => {
     const deltaSeconds = presentationClock.getDeltaSeconds();
     if (!group.current || !character.current) return;
-    const pose = getAuthoritativeColonistPose(motion.advance(deltaSeconds, fixedStepPresentationSeconds), layout);
+    const pose = getAuthoritativeColonistPose(motion.advance(deltaSeconds, fixedStepPresentationSeconds), layout ?? undefined);
     character.current.visible = pose.visible;
     group.current.position.set(...pose.position);
     group.current.rotation.y = interpolateFacing(group.current.rotation.y, pose.rotationY, deltaSeconds);
@@ -180,13 +178,14 @@ function MaintenanceActivity() {
   return <group position={[0.12, 0.72, 0.18]}><group ref={sparks}>{[-0.08, 0, 0.09].map((x, index) => <mesh key={index} position={[x, index * 0.09, index % 2 * 0.05]}><sphereGeometry args={[0.025, 6, 6]} /><meshBasicMaterial color="#ffd18a" /></mesh>)}</group><pointLight ref={serviceLight} color="#f1b861" distance={2} intensity={0.3} /></group>;
 }
 
-function Ground({ layout }: { readonly layout: GeneratedPlanetLayout }) {
+function Ground({ layout }: { readonly layout: GeneratedPlanetLayout | null }) {
+  const plateauVertices = getGeneratedPlateauVertices(layout);
   const plateau = useMemo(() => {
     const shape = new Shape();
-    layout.plateauVertices.forEach(([x, z], index) => index === 0 ? shape.moveTo(x, z) : shape.lineTo(x, z));
+    plateauVertices.forEach(([x, z], index) => index === 0 ? shape.moveTo(x, z) : shape.lineTo(x, z));
     shape.closePath();
     return shape;
-  }, [layout.plateauVertices]);
+  }, [plateauVertices]);
   return (
     <group>
       <mesh receiveShadow position={[0, -0.08, 0]} rotation-x={-Math.PI / 2}>
@@ -222,12 +221,12 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, layout, on
           const instanceId = id === 'reactor' ? 'reactor-01' : id === 'mine' ? 'mine-01' : id === 'oxygen' ? 'oxygen-processor-01' : id === 'battery' ? 'battery-01' : undefined;
           return <Facility key={id} debugState={debugState} id={id} layout={layout} simulationState={simulationSnapshot.facilities.find(({ id: facilityId }) => facilityId === instanceId)} />;
         })}
-        {layout.expansionSlots.map((placement) => <group key={placement.id} position={[placement.position[0], 0.1, placement.position[1]]} rotation-y={placement.rotationY}><RuntimeAsset asset={requirePrototypeAsset('expansion-pad')} /></group>)}
-        {layout.propZones.flatMap((zone) => [-0.33, 0.33].map((offset, index) => <RuntimeAsset key={`${zone.id}-${index}`} asset={requirePrototypeAsset(index % 2 ? 'rock-small-a' : 'rock-small-b')} position={[zone.center[0] + offset * zone.width, 0.12, zone.center[1] + (index ? -0.27 : 0.27) * zone.depth]} rotationY={(zone.seedOffset + index) * 0.73} />))}
+        {getGeneratedExpansionPads(layout).map((placement) => <group key={placement.id} position={[placement.position[0], 0.1, placement.position[1]]} rotation-y={placement.rotationY}><RuntimeAsset asset={requirePrototypeAsset('expansion-pad')} /></group>)}
+        {getGeneratedPropPlacements(layout).map((prop) => <RuntimeAsset key={prop.id} asset={requirePrototypeAsset(prop.assetId)} position={[prop.position[0], prop.elevation, prop.position[1]]} rotationY={prop.rotationY} scaleMultiplier={prop.scale} />)}
         <StreetLights debugState={debugState} layout={layout} />
         {simulationSnapshot.colonists.map((colonist) => <Colonist colonist={colonist} fixedStepPresentationSeconds={simulationSnapshot.clock.fixedStepMinutes * simulationSnapshot.clock.realSecondsPerSimulationHour / 60} key={colonist.id} layout={layout} />)}
         </Suspense>
-        {debugState.layoutOverlayVisible && <LayoutDebugOverlay layout={layout} />}
+        {debugState.layoutOverlayVisible && layout && <LayoutDebugOverlay layout={layout} />}
       </group>
       {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
       <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />
@@ -240,31 +239,14 @@ export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, layou
   const quality = QUALITY_PROFILES[debugState.quality];
   const simulationSnapshot = useSimulationSnapshot();
 
-  if (usePrototypeLayout) {
-    return (
-      <div aria-label="Koloni görsel prototipi (Prototype)" className="world-scene-shell">
-        <PresentationTimeProvider speed={simulationSnapshot.clock.speed}>
-          <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
-            <PresentationTimeDriver />
-            <color attach="background" args={[isNight(debugState.timeOfDay) ? '#07101b' : '#9fb8c0']} />
-            {debugState.fogEnabled && <fog attach="fog" args={[isNight(debugState.timeOfDay) ? '#07101b' : '#9fb8c0', isNight(debugState.timeOfDay) ? 58 : 64, isNight(debugState.timeOfDay) ? 96 : 105]} />}
-            <ambientLight intensity={isNight(debugState.timeOfDay) ? 0.72 : 1.45} color={isNight(debugState.timeOfDay) ? '#6f87a8' : '#d7eef2'} />
-            <directionalLight castShadow={quality.shadows} color={isNight(debugState.timeOfDay) ? '#86a1cd' : '#fff1d3'} intensity={isNight(debugState.timeOfDay) ? 1.05 : 2.4} position={[-12, 20, 10]} shadow-mapSize={[1024, 1024]} />
-            <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />
-            <CameraRig layout={null} panelOpen={debugPanelOpen} preset={debugState.cameraPreset} resetToken={cameraResetToken} />
-            {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
-          </Canvas>
-        </PresentationTimeProvider>
-      </div>
-    );
-  }
+  const activeLayout = usePrototypeLayout ? null : layout;
 
   return (
-    <div aria-label="Koloni görsel prototipi" className="world-scene-shell">
+    <div aria-label={activeLayout ? 'Koloni görsel prototipi' : 'Koloni görsel prototipi (Faz 3 sabit yerleşim)'} className="world-scene-shell">
       <PresentationTimeProvider speed={simulationSnapshot.clock.speed}>
         <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
           <PresentationTimeDriver />
-          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} layout={layout!} onMetrics={onMetrics} onObjectInspection={onObjectInspection} simulationSnapshot={simulationSnapshot} />
+          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} layout={activeLayout} onMetrics={onMetrics} onObjectInspection={onObjectInspection} simulationSnapshot={simulationSnapshot} />
         </Canvas>
       </PresentationTimeProvider>
     </div>
