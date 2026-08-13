@@ -28,7 +28,8 @@ interface WorldSceneProps {
   readonly debugState: PrototypeDebugState;
   readonly onMetrics: (metrics: WorldMetrics) => void;
   readonly onObjectInspection: (inspection: RuntimeObjectInspection) => void;
-  readonly layout: GeneratedPlanetLayout;
+  readonly layout: GeneratedPlanetLayout | null;
+  readonly usePrototypeLayout?: boolean;
 }
 
 function MetricsProbe({ onMetrics, particleCount }: { readonly onMetrics: (metrics: WorldMetrics) => void; readonly particleCount: number }) {
@@ -235,15 +236,35 @@ function WorldContent({ cameraResetToken, debugPanelOpen, debugState, layout, on
   );
 }
 
-export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, layout, onMetrics, onObjectInspection }: WorldSceneProps) {
+export function WorldScene({ cameraResetToken, debugPanelOpen, debugState, layout, onMetrics, onObjectInspection, usePrototypeLayout }: WorldSceneProps) {
   const quality = QUALITY_PROFILES[debugState.quality];
   const simulationSnapshot = useSimulationSnapshot();
+
+  if (usePrototypeLayout) {
+    return (
+      <div aria-label="Koloni görsel prototipi (Prototype)" className="world-scene-shell">
+        <PresentationTimeProvider speed={simulationSnapshot.clock.speed}>
+          <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
+            <PresentationTimeDriver />
+            <color attach="background" args={[isNight(debugState.timeOfDay) ? '#07101b' : '#9fb8c0']} />
+            {debugState.fogEnabled && <fog attach="fog" args={[isNight(debugState.timeOfDay) ? '#07101b' : '#9fb8c0', isNight(debugState.timeOfDay) ? 58 : 64, isNight(debugState.timeOfDay) ? 96 : 105]} />}
+            <ambientLight intensity={isNight(debugState.timeOfDay) ? 0.72 : 1.45} color={isNight(debugState.timeOfDay) ? '#6f87a8' : '#d7eef2'} />
+            <directionalLight castShadow={quality.shadows} color={isNight(debugState.timeOfDay) ? '#86a1cd' : '#fff1d3'} intensity={isNight(debugState.timeOfDay) ? 1.05 : 2.4} position={[-12, 20, 10]} shadow-mapSize={[1024, 1024]} />
+            <MetricsProbe onMetrics={onMetrics} particleCount={debugState.snowEnabled ? quality.snowParticles : 0} />
+            <CameraRig layout={null} panelOpen={debugPanelOpen} preset={debugState.cameraPreset} resetToken={cameraResetToken} />
+            {debugState.snowEnabled && <Snow count={quality.snowParticles} />}
+          </Canvas>
+        </PresentationTimeProvider>
+      </div>
+    );
+  }
+
   return (
     <div aria-label="Koloni görsel prototipi" className="world-scene-shell">
       <PresentationTimeProvider speed={simulationSnapshot.clock.speed}>
         <Canvas dpr={quality.dpr} orthographic camera={{ near: 0.1, far: 140, zoom: 30 }} shadows={quality.shadows} gl={{ antialias: debugState.quality !== 'low', powerPreference: 'high-performance' }}>
           <PresentationTimeDriver />
-          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} layout={layout} onMetrics={onMetrics} onObjectInspection={onObjectInspection} simulationSnapshot={simulationSnapshot} />
+          <WorldContent cameraResetToken={cameraResetToken} debugPanelOpen={debugPanelOpen} debugState={debugState} layout={layout!} onMetrics={onMetrics} onObjectInspection={onObjectInspection} simulationSnapshot={simulationSnapshot} />
         </Canvas>
       </PresentationTimeProvider>
     </div>
