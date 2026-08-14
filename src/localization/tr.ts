@@ -34,6 +34,7 @@ export const tr = {
       'action-required-field-missing': 'Eylemde eksik alan var: hedef tesis veya ayarlanacak değer belirtilmemiş.',
       'action-value-type': 'Eylem için seçilen değer bu ayarın kabul ettiği türde değil.',
       'compare-operand-type': 'Karşılaştırılan iki değer aynı türde değil; bu karşılaştırma yapılamaz.',
+      'compare-operand-missing': 'Karşılaştırma düğümünün bir girişi boş; karşılaştırılacak değer bağlanmalı.',
       'and-input-missing': 'VE düğümünün iki koşul girişi de bağlı olmalı.',
       'graph-cycle': 'Bağlantılar kendi üzerine dönüyor; döngü içeren protokol uygulanamaz.',
       'delay-duration-out-of-range': 'Geciktirme süresi izin verilen aralığın dışında.',

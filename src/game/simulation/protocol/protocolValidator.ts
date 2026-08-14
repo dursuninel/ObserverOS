@@ -239,6 +239,14 @@ export function validateProtocol(
       // §53.2: Compare operand type incompatible.
       if (incompatible) add('protocol.error.compare-operand-type', 'error', { nodeId: node.id });
 
+      // §53.2 (engelleyen bulgu): runtime bağlanmamış operandı değerlendiremez —
+      // sabit comparand yoksa iki operand da bir kenardan beslenmelidir.
+      const leftConnected = incomingSourceType.has(portKey(node.id, 'left'));
+      const rightConnected = incomingSourceType.has(portKey(node.id, 'right'));
+      if (!leftConnected || (comparand === undefined && !rightConnected)) {
+        add('protocol.error.compare-operand-missing', 'error', { nodeId: node.id });
+      }
+
       const leftSourceId = incomingSourceNodeId.get(portKey(node.id, 'left'));
       const leftSource = leftSourceId === undefined ? undefined : nodeById.get(leftSourceId);
       if (typeof comparand === 'number' && leftSource !== undefined && leftSource.kind === 'sensor') {

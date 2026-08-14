@@ -1,10 +1,13 @@
 import type { FacilityCommandRequest, FacilityCommandResult, FacilityDefinition, FacilityInstanceState, SafetyInterlock } from '../domain/facilities/Facility';
 import type { MaintenanceTaskState } from '../domain/maintenance/Maintenance';
+import type { ProtocolActionRequest } from '../domain/protocol/Protocol';
 import type { ColonistState } from '../domain/workforce/Workforce';
 import { PHASE_THREE_BASELINE_CONFIG, type SimulationConfig } from './SimulationConfig';
 import { SimulationClock, type SimulationClockState, type SimulationSpeed } from './SimulationClock';
 import type { SimulationEvent } from './SimulationEvent';
 import type { SimulationSnapshot } from './SimulationSnapshot';
+import type { ExecutableProtocol } from './protocol/protocolCompiler';
+import { ProtocolRuntime, type ProtocolRuntimeState, type ProtocolSensorReader } from './protocol/protocolRuntime';
 import { type ConditionTransition, applyFacilityWear } from './systems/conditionSystem';
 import { applyFacilityCommand, createFacilityState, defaultSafetyInterlock, toReadonlyFacilityState, type MutableFacilityState } from './systems/facilityCommands';
 import { compareMaintenanceTasks, refreshMaintenanceRequests, toReadonlyMaintenanceTask, updateMaintenanceTasks, type MaintenanceTransition, type MutableMaintenanceTaskState } from './systems/maintenanceSystem';
@@ -23,8 +26,18 @@ import {
   type WorkforceTransition,
 } from './systems/workforceSystem';
 
+/**
+ * Protocol runtime bağlantısı. Sensor kataloğu capability katmanından gelir; hangi
+ * sensor'ün hangi değeri okuduğu engine içine gömülmez (spec §12).
+ */
+export interface SimulationProtocolOptions {
+  readonly protocols: readonly ExecutableProtocol[];
+  readonly readSensor: ProtocolSensorReader;
+}
+
 export interface SimulationEngineOptions {
   readonly config?: SimulationConfig;
+  readonly protocols?: SimulationProtocolOptions;
   readonly safetyInterlock?: SafetyInterlock;
 }
 
@@ -37,6 +50,7 @@ interface SerializedSimulationState {
   readonly facilities: readonly FacilityInstanceState[];
   readonly maintenanceTasks: readonly MaintenanceTaskState[];
   readonly processedCommandIds: readonly string[];
+  readonly protocolRuntime?: ProtocolRuntimeState;
   readonly resources: SimulationSnapshot['resources'];
   readonly revision: number;
 }
@@ -49,6 +63,15 @@ function validateConfig(config: SimulationConfig): void {
   }
   if (config.maintenanceThreshold !== undefined && (config.maintenanceThreshold <= 0 || config.maintenanceThreshold > 100)) {
     throw new Error('maintenanceThreshold must be within 1..100.');
+  }
+  if (config.protocolLimits !== undefined) {
+    const limits = config.protocolLimits;
+    if (limits.delayMinimumMinutes <= 0 || limits.delayMaximumMinutes < limits.delayMinimumMinutes) {
+      throw new Error('Protocol delay limits must be positive and ordered.');
+    }
+    if (limits.longDelayMinutes < limits.delayMinimumMinutes || limits.longDelayMinutes > limits.delayMaximumMinutes) {
+      throw new Error('longDelayMinutes must sit inside the allowed delay range.');
+    }
   }
   if (config.population !== undefined) {
     const population = config.population;
@@ -88,14 +111,18 @@ export class SimulationEngine {
   private readonly listeners = new Set<SnapshotListener>();
   private readonly maintenanceTasks: MutableMaintenanceTaskState[] = [];
   private readonly processedCommandIds = new Set<string>();
+  private readonly protocolOptions: SimulationProtocolOptions | undefined;
+  private readonly protocolRuntime = new ProtocolRuntime();
   private readonly resources: MutableResourcePoolState;
   private readonly safetyInterlock: SafetyInterlock;
   private eventSequence = 0;
+  private protocolActionRequests: readonly ProtocolActionRequest[] = Object.freeze([]);
   private revision = 0;
   private snapshot: SimulationSnapshot;
 
   constructor(options: SimulationEngineOptions = {}) {
     this.config = options.config ?? PHASE_THREE_BASELINE_CONFIG;
+    this.protocolOptions = options.protocols;
     validateConfig(this.config);
     this.clock = new SimulationClock(this.config.clock, this.config.initialSpeed);
     this.safetyInterlock = options.safetyInterlock ?? defaultSafetyInterlock;
@@ -130,6 +157,14 @@ export class SimulationEngine {
 
   getEvents(): readonly SimulationEvent[] {
     return Object.freeze([...this.events]);
+  }
+
+  /**
+   * En son fixed step'te protocol runtime'ın ürettiği action request'ler (§53.6).
+   * Bu talepler burada UYGULANMAZ; command arbitration ayrı bir katmandır.
+   */
+  getProtocolActionRequests(): readonly ProtocolActionRequest[] {
+    return this.protocolActionRequests;
   }
 
   getSnapshot(): SimulationSnapshot {
@@ -317,6 +352,7 @@ export class SimulationEngine {
       facilities: this.snapshot.facilities,
       maintenanceTasks: this.snapshot.maintenanceTasks,
       processedCommandIds: [...this.processedCommandIds].sort(),
+      protocolRuntime: this.protocolRuntime.exportState(),
       resources: this.snapshot.resources,
       revision: this.revision,
     };
@@ -362,6 +398,8 @@ export class SimulationEngine {
     for (const id of state.processedCommandIds) this.processedCommandIds.add(id);
     this.activeShortageIds.clear();
     for (const id of state.activeShortageIds) this.activeShortageIds.add(id);
+    // Delay'de bekleyen execution'ların KALAN süresi save ile taşınır (§13.5).
+    if (state.protocolRuntime !== undefined) this.protocolRuntime.restoreState(state.protocolRuntime);
     for (const facility of state.facilities) {
       const target = this.facilities.get(facility.id);
       if (target === undefined) throw new Error(`Serialized facility is missing from config: ${facility.id}`);
@@ -424,6 +462,17 @@ export class SimulationEngine {
       this.emitMaintenanceTransitions(postWearRequests);
       if (conditionTransitions.length > 0 || postWearRequests.length > 0) {
         this.reallocateWorkforce(false, true);
+      }
+      if (this.protocolOptions !== undefined) {
+        // Protocol runtime bu tick'in authoritative state'ini okur; snapshot adım
+        // sonunda tazelenir, listener'lar hâlâ yalnız publish() ile uyarılır.
+        this.snapshot = this.createSnapshot();
+        this.protocolActionRequests = this.protocolRuntime.tick({
+          protocols: this.protocolOptions.protocols,
+          readSensor: this.protocolOptions.readSensor,
+          simTime: elapsedMinutes,
+          stepMinutes,
+        });
       }
       this.revision += 1;
     }

@@ -88,6 +88,23 @@ export type ProtocolNode =
   | ProtocolSensorNode
   | ProtocolTriggerNode;
 
+/**
+ * Runtime'ın Action node için ürettiği komut talebi (§13.11, §53.6).
+ *
+ * Bu talep tesise UYGULANMAZ: aynı tick'teki bütün talepler toplandıktan sonra
+ * command arbitration çalışır. Şekil, arbitration katmanıyla sözleşmedir.
+ */
+export interface ProtocolActionRequest {
+  /** Action capability kimliği; arbitration bunu facility actuator'üne çözer. */
+  readonly actuator: string;
+  readonly facilityId?: string;
+  readonly priority: Priority;
+  readonly protocolExecutionId: string;
+  readonly protocolId: string;
+  readonly simTime: number;
+  readonly value?: ProtocolLiteral;
+}
+
 export interface ProtocolDefinition {
   readonly edges: readonly ProtocolEdge[];
   readonly id: string;
@@ -152,6 +169,7 @@ export const PROTOCOL_ERROR_CODES = [
   'protocol.error.action-required-field-missing',
   'protocol.error.action-value-type',
   'protocol.error.compare-operand-type',
+  'protocol.error.compare-operand-missing',
   'protocol.error.and-input-missing',
   'protocol.error.graph-cycle',
   'protocol.error.delay-duration-out-of-range',

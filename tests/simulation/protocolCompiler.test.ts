@@ -112,6 +112,14 @@ describe('protocol validation - blocking errors (spec §53.2)', () => {
     expect(codesOf(validateProtocol(target, capabilities()), 'error')).toContain('protocol.error.compare-operand-type');
   });
 
+  it('rejects a compare whose operand is left unconnected (runtime cannot evaluate it)', () => {
+    const openLeft = withEdges((edges) => edges.filter((candidate) => candidate.id !== 'e2'));
+    const openRight = withNodes((nodes) => replaceNode(nodes, { id: 'c1', kind: 'compare', operator: '<' }));
+    expect(codesOf(validateProtocol(openLeft, capabilities()), 'error')).toContain('protocol.error.compare-operand-missing');
+    expect(codesOf(validateProtocol(openRight, capabilities()), 'error')).toContain('protocol.error.compare-operand-missing');
+    expect(codesOf(validateProtocol(definition(), capabilities()), 'error')).toEqual([]);
+  });
+
   it('rejects an ordering trigger whose threshold is not numeric', () => {
     const target = withNodes((nodes) => replaceNode(nodes, { id: 't1', kind: 'trigger', operator: '<', sensorId: 'energy-level', threshold: 'low' }));
     expect(codesOf(validateProtocol(target, capabilities()), 'error')).toContain('protocol.error.compare-operand-type');
@@ -166,6 +174,7 @@ describe('protocol validation - blocking errors (spec §53.2)', () => {
       withNodes((nodes) => replaceNode(nodes, { actionId: 'set-mode', facilityId: 'reactor-01', id: 'a1', kind: 'action' })),
       withNodes((nodes) => replaceNode(nodes, { actionId: 'set-mode', facilityId: 'reactor-01', id: 'a1', kind: 'action', value: 'turbo' })),
       withNodes((nodes) => replaceNode(nodes, { comparand: true, id: 'c1', kind: 'compare', operator: '<' })),
+      withEdges((edges) => edges.filter((candidate) => candidate.id !== 'e2')),
       withEdges((edges) => edges.filter((candidate) => candidate.id !== 'e5')),
       withEdges((edges) => [...edges, edge('e8', 'd1', 'out', 'and1', 'in')]),
       withNodes((nodes) => replaceNode(nodes, { durationMinutes: 0, id: 'd1', kind: 'delay' })),

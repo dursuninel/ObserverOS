@@ -1,4 +1,5 @@
 import type { FacilityDefinition } from '../domain/facilities/Facility';
+import type { ProtocolValidationLimits } from '../domain/protocol/Protocol';
 import type { ResourceId, ResourceRates } from '../domain/resources/Resource';
 import type { TravelNetworkConfig } from '../domain/workforce/TravelNetwork';
 import type { SimulationClockConfig, SimulationSpeed } from './SimulationClock';
@@ -53,6 +54,23 @@ export const PHASE_THREE_TRAVEL_NETWORK: TravelNetworkConfig = Object.freeze({
   walkingSpeedUnitsPerSimulationMinute: 0.25,
 });
 
+/**
+ * Protocol sayısal sınırları (AGENTS.md §4 TUNABLE — spec §13.5/§53.2 rakam vermez).
+ * Data katmanındadır; validator ve runtime içine hard-code EDİLMEZ.
+ *
+ * - `delayMinimumMinutes`: bir fixed step'ten (1 sim. dk.) kısa delay deterministic
+ *   olarak temsil edilemez.
+ * - `delayMaximumMinutes`: bir yerel gün (`clock.localDayMinutes`).
+ * - `longDelayMinutes`: yerel günün yarısı; bunun üstü "görev döngüsünden uzun" uyarısıdır.
+ * - `thresholdOscillationMargin`: 0-100 kondisyon/yüzde ölçeğinde 2 puanlık dar bant.
+ */
+export const PHASE_FIVE_PROTOCOL_LIMITS: ProtocolValidationLimits = Object.freeze({
+  delayMaximumMinutes: 24 * 60,
+  delayMinimumMinutes: 1,
+  longDelayMinutes: 12 * 60,
+  thresholdOscillationMargin: 2,
+});
+
 export interface SimulationConfig {
   readonly baseConsumptionPerHour: ResourceRates;
   readonly clock: SimulationClockConfig;
@@ -67,6 +85,7 @@ export interface SimulationConfig {
     restDurationMinutes: number;
     restGroupCount: number;
   }>;
+  readonly protocolLimits?: ProtocolValidationLimits;
   readonly travelNetwork?: TravelNetworkConfig;
   readonly wearModeMultipliers?: Readonly<Record<'boost' | 'eco' | 'normal', number>>;
 }
@@ -159,6 +178,7 @@ export const PHASE_THREE_BASELINE_CONFIG: SimulationConfig = Object.freeze({
     restDurationMinutes: 60,
     restGroupCount: 5,
   }),
+  protocolLimits: PHASE_FIVE_PROTOCOL_LIMITS,
   travelNetwork: PHASE_THREE_TRAVEL_NETWORK,
   wearModeMultipliers: Object.freeze({ eco: 0.5, normal: 1, boost: 2.5 }),
 });
