@@ -17,6 +17,8 @@ export interface ProtocolNodePortView {
 }
 
 export interface ProtocolNodeCardData extends Record<string, unknown> {
+  /** Son doğrulamanın bu karta çapaladığı en ağır bulgu (tasarım §17.1/§17.2). */
+  readonly finding?: 'error' | 'warning';
   readonly height: number;
   readonly inputs: readonly ProtocolNodePortView[];
   readonly kind: ProtocolNodeKind;
@@ -50,6 +52,7 @@ export function ProtocolNodeCard({ data, selected }: NodeProps<ProtocolFlowNode>
   return (
     <div
       className="protocol-node"
+      data-finding={data.finding ?? 'none'}
       data-kind={data.kind}
       data-selected={selected === true ? 'true' : 'false'}
       data-testid={`protocol-node-${data.kind}`}

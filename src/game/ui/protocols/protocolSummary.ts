@@ -53,7 +53,7 @@ export function facilityLabel(t: ProtocolTranslate, facilityId: string): string 
   return t(`protocolManager.facility.${facilityId}`, { defaultValue: facilityId });
 }
 
-function measurementLabel(t: ProtocolTranslate, sensorId: string, facilityId: string | undefined): string {
+export function measurementLabel(t: ProtocolTranslate, sensorId: string, facilityId: string | undefined): string {
   if (facilityId === undefined) return t(`protocolManager.measurementGlobal.${sensorId}`, { defaultValue: sensorId });
   return t(`protocolManager.measurement.${sensorId}`, {
     defaultValue: sensorId,
@@ -66,6 +66,16 @@ function literalLabel(t: ProtocolTranslate, value: ProtocolLiteral, group: strin
   if (typeof value === 'number') return value.toString();
   if (group === undefined) return value;
   return t(`protocolManager.value.${group}.${value}`, { defaultValue: value });
+}
+
+/** Eylem değerinin ekran karşılığı; sayısal değerler olduğu gibi, kapalı listeler sözlükten. */
+export function actionValueLabel(t: ProtocolTranslate, actionId: string, value: ProtocolLiteral): string {
+  return literalLabel(t, value, ACTION_VALUE_GROUPS[actionId]);
+}
+
+/** Koşul (operatör) seçim listesi metni — tasarım §12.3. */
+export function operatorChoiceKey(operator: CompareOperator): string {
+  return `protocolEditor.operatorChoice.${OPERATOR_KEYS[operator]}`;
 }
 
 /** `left` portunu besleyen sensor node; bulunamazsa koşul ölçümü bilinmiyordur. */

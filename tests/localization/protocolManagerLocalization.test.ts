@@ -42,6 +42,7 @@ describe('protocol manager localization', () => {
       'protocolManager.card.lastRun', 'protocolManager.card.priority', 'protocolManager.card.scale',
       'protocolManager.card.noFacility', 'protocolManager.lastRun.never', 'protocolManager.lastRun.at', 'protocolManager.lastRun.entry',
       'protocolManager.summary.noAction', 'protocolManager.summary.noTrigger', 'protocolManager.summary.sentence',
+      'protocolManager.create.action', 'protocolManager.create.defaultName',
     ]) {
       expect(i18n.exists(key, { lng: 'tr' }), key).toBe(true);
     }

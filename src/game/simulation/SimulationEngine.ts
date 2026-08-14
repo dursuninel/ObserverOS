@@ -39,6 +39,7 @@ import {
  * sensor'ün hangi değeri okuduğu engine içine gömülmez (spec §12).
  */
 export interface SimulationProtocolOptions {
+  /** Açılıştaki program kümesi; oyun sırasında `setProtocolPrograms` ile değiştirilir. */
   readonly protocols: readonly ExecutableProtocol[];
   readonly readSensor: ProtocolSensorReader;
   /**
@@ -136,12 +137,14 @@ export class SimulationEngine {
   private protocolActionRequests: readonly ProtocolActionRequest[] = Object.freeze([]);
   private protocolCommandOutcomes: readonly ProtocolCommandOutcome[] = EMPTY_PROTOCOL_OUTCOMES;
   private protocolExecutionTraces: readonly ProtocolExecutionTrace[] = Object.freeze([]);
+  private protocolPrograms: readonly ExecutableProtocol[];
   private revision = 0;
   private snapshot: SimulationSnapshot;
 
   constructor(options: SimulationEngineOptions = {}) {
     this.config = options.config ?? PHASE_THREE_BASELINE_CONFIG;
     this.protocolOptions = options.protocols;
+    this.protocolPrograms = options.protocols?.protocols ?? Object.freeze([]);
     validateConfig(this.config);
     this.clock = new SimulationClock(this.config.clock, this.config.initialSpeed);
     this.safetyInterlock = options.safetyInterlock ?? defaultSafetyInterlock;
@@ -194,6 +197,28 @@ export class SimulationEngine {
   /** Headless execution trace'leri (§53.5). Faz 5 data katmanı. */
   getProtocolExecutionTraces(): readonly ProtocolExecutionTrace[] {
     return this.protocolExecutionTraces;
+  }
+
+  /** Şu anda koşan derlenmiş protokoller. */
+  getProtocolPrograms(): readonly ExecutableProtocol[] {
+    return this.protocolPrograms;
+  }
+
+  /** Protokol koşabilmesi için kurulumda sensor okuyucusu verilmiş mi. */
+  canRunProtocols(): boolean {
+    return this.protocolOptions !== undefined;
+  }
+
+  /**
+   * Koşan protokol kümesini değiştirir — düzenleyicideki `Uygula` akışının motor ucu.
+   *
+   * Yalnız program listesi değişir: saat, hız ve tesis durumu ELLENMEZ. Bu yüzden
+   * uygulama simülasyonu duraklatmaz (§14.2 satır 1060). Sensor okuyucusu kurulum
+   * seçeneğidir; olmadan protokol koşamayacağı için burada sessizce yutulmaz.
+   */
+  setProtocolPrograms(programs: readonly ExecutableProtocol[]): void {
+    if (this.protocolOptions === undefined) throw new Error('Protocol programs need a sensor reader supplied at construction.');
+    this.protocolPrograms = Object.freeze([...programs]);
   }
 
   getSnapshot(): SimulationSnapshot {
@@ -562,7 +587,7 @@ export class SimulationEngine {
         // sonunda tazelenir, listener'lar hâlâ yalnız publish() ile uyarılır.
         this.snapshot = this.createSnapshot();
         this.protocolActionRequests = this.protocolRuntime.tick({
-          protocols: this.protocolOptions.protocols,
+          protocols: this.protocolPrograms,
           readSensor: this.protocolOptions.readSensor,
           simTime: elapsedMinutes,
           stepMinutes,

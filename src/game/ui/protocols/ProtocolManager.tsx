@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useSimulationEngine, useSimulationSnapshot } from '../../../app/providers/simulationContext';
@@ -9,7 +9,9 @@ import { useProtocolStore } from '../../state/protocolStore';
 import { PHASE_THREE_BASELINE_CONFIG } from '../../simulation/SimulationConfig';
 import {
   createProtocolCards,
+  createProtocolDraftDefinition,
   filterProtocolCards,
+  nextProtocolId,
   formatLastExecution,
   isProtocolFilterActive,
   protocolFacilityOptions,
@@ -78,6 +80,8 @@ export function ProtocolManager() {
   const protocols = useProtocolStore((state) => state.protocols);
   const executions = useProtocolStore((state) => state.executions);
   const recordExecutions = useProtocolStore((state) => state.recordExecutions);
+  const upsertProtocol = useProtocolStore((state) => state.upsertProtocol);
+  const navigate = useNavigate();
 
   // Son çalışma alanı yetkili simülasyondan beslenir; UI kendi zamanını uydurmaz.
   useEffect(() => {
@@ -105,8 +109,22 @@ export function ProtocolManager() {
   return (
     <section aria-labelledby="protocol-manager-heading" className="protocol-manager" data-testid="protocol-manager">
       <div className="protocol-manager-intro">
-        <h1 id="protocol-manager-heading">{t('protocolManager.title')}</h1>
-        <p>{t('protocolManager.intro')}</p>
+        <div>
+          <h1 id="protocol-manager-heading">{t('protocolManager.title')}</h1>
+          <p>{t('protocolManager.intro')}</p>
+        </div>
+        <button
+          className="protocol-create"
+          data-testid="protocol-create"
+          onClick={() => {
+            const id = nextProtocolId(protocols);
+            upsertProtocol(createProtocolDraftDefinition(id, t('protocolManager.create.defaultName')));
+            void navigate(`/protocols/${id}`);
+          }}
+          type="button"
+        >
+          {t('protocolManager.create.action')}
+        </button>
       </div>
 
       <div aria-label={t('protocolManager.filters.label')} className="protocol-toolbar" role="search">

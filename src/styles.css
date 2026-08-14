@@ -457,6 +457,27 @@ select {
   padding: 1rem;
 }
 
+.protocol-manager-intro {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.protocol-create {
+  background: transparent;
+  border: 1px solid var(--protocol-panel-border);
+  border-radius: 0.75rem;
+  color: #eaf4ff;
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  padding: 0 1rem;
+  white-space: nowrap;
+}
+
+.protocol-create:hover { border-color: var(--protocol-node-border-hover); }
+
 .protocol-manager-intro h1 {
   font-size: 1rem;
   letter-spacing: 0.08em;
@@ -865,6 +886,183 @@ select {
   padding: 0.5rem 16px;
 }
 
+/* Üst bardaki taahhüt düğmeleri (§6) — Kontrol Et ikincil, Uygula birincil. */
+.protocol-editor-commit {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.protocol-editor-secondary,
+.protocol-editor-primary {
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  padding: 0 1.1rem;
+}
+
+.protocol-editor-secondary {
+  background: transparent;
+  border: 1px solid var(--protocol-panel-border);
+  color: #eaf4ff;
+}
+
+.protocol-editor-secondary:hover { border-color: var(--protocol-node-border-hover); }
+
+.protocol-editor-primary {
+  background: var(--protocol-accent);
+  border: 1px solid var(--protocol-accent);
+  color: #06202e;
+  font-weight: 600;
+}
+
+.protocol-editor-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.protocol-editor-dirty {
+  color: var(--protocol-accent);
+  font-size: 0.75rem;
+}
+
+.protocol-editor-dirty::before {
+  content: '•';
+  margin-right: 4px;
+}
+
+/* Kontrol Et sonuç şeridi (§17.3). */
+.protocol-check-result {
+  background: rgba(10, 28, 40, 0.94);
+  border: 1px solid var(--protocol-panel-border);
+  border-radius: 18px;
+  max-width: 560px;
+  padding: 12px 16px;
+}
+
+.protocol-check-result[data-severity='error'] { border-color: var(--protocol-danger); }
+.protocol-check-result[data-severity='warning'] { border-color: #e0b45f; }
+.protocol-check-result[data-severity='clean'] { border-color: #5fd0a8; }
+
+.protocol-check-headline { font-weight: 600; margin: 0; }
+.protocol-check-result[data-severity='error'] .protocol-check-headline { color: #ff9d8a; }
+.protocol-check-result[data-severity='warning'] .protocol-check-headline { color: #f0d29a; }
+.protocol-check-result[data-severity='clean'] .protocol-check-headline { color: #8ee5c4; }
+
+.protocol-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.protocol-check-list li {
+  align-items: baseline;
+  border-left: 3px solid transparent;
+  color: #eaf4ff;
+  display: flex;
+  font-size: 0.8125rem;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.protocol-check-list li[data-severity='error'] { border-left-color: var(--protocol-danger); }
+.protocol-check-list li[data-severity='warning'] { border-left-color: #e0b45f; }
+
+.protocol-check-focus,
+.protocol-check-dismiss {
+  background: transparent;
+  border: 0;
+  color: var(--protocol-accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.protocol-check-more { color: var(--protocol-text-faint); font-size: 0.75rem; margin: 8px 0 0; }
+.protocol-check-dismiss { display: block; margin-top: 8px; }
+
+/* Düğüm ayarları alanları (§12.1). */
+.protocol-field {
+  border-top: 1px solid var(--protocol-panel-separator);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.protocol-field-label {
+  color: var(--protocol-text-faint);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.protocol-field[data-required='true'] .protocol-field-label::after {
+  color: var(--protocol-accent);
+  content: ' *';
+}
+
+.protocol-field-control {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.protocol-field-control input,
+.protocol-field-control select {
+  background: var(--protocol-field-surface);
+  border: 1px solid var(--protocol-panel-border);
+  border-radius: 12px;
+  color: #eaf4ff;
+  flex: 1;
+  font: inherit;
+  min-height: 40px;
+  padding: 0 0.6rem;
+  width: 100%;
+}
+
+.protocol-field-control input:focus-visible,
+.protocol-field-control select:focus-visible {
+  border-color: var(--protocol-accent);
+  outline: 2px solid rgba(57, 191, 255, 0.25);
+}
+
+.protocol-field-suffix,
+.protocol-field-help { color: var(--protocol-text-faint); font-size: 0.75rem; }
+
+.protocol-field-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.protocol-field-findings li {
+  border-left: 3px solid var(--protocol-danger);
+  font-size: 0.8125rem;
+  padding-left: 8px;
+}
+
+.protocol-field-findings li[data-severity='warning'] { border-left-color: #e0b45f; }
+
+.protocol-finding-tag {
+  color: var(--protocol-danger);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.protocol-field-findings li[data-severity='warning'] .protocol-finding-tag { color: #f0d29a; }
+
 /* Düğüm paleti — kapalı liste, 6 satır (§8). */
 .protocol-palette {
   background: rgba(10, 28, 40, 0.9);
@@ -921,6 +1119,18 @@ select {
 }
 
 .protocol-node:hover { border-color: var(--protocol-node-border-hover); }
+
+/* §17.1/§17.2: hata sınırı değiştirir, uyarı yalnız alt şerit ekler. */
+.protocol-node[data-finding='error'] { border-color: var(--protocol-danger); border-width: 1.5px; }
+.protocol-node[data-finding='warning']::after {
+  background: #e0b45f;
+  bottom: 0;
+  content: '';
+  height: 3px;
+  left: 3px;
+  position: absolute;
+  right: 0;
+}
 
 .protocol-node-identity {
   border-radius: 14px 0 0 14px;
@@ -1011,6 +1221,8 @@ select {
 .protocol-edge .react-flow__edge-path { stroke: var(--protocol-edge-flow); stroke-width: 1.5; }
 .protocol-edge-value .react-flow__edge-path { stroke: var(--protocol-edge-value); stroke-dasharray: 2 3; stroke-width: 1.25; }
 .protocol-edge-no .react-flow__edge-path { stroke: var(--protocol-edge-negative); stroke-dasharray: 6 4; }
+.protocol-edge-finding-error .react-flow__edge-path { stroke: var(--protocol-danger); stroke-width: 2; }
+.protocol-edge-finding-warning .react-flow__edge-path { stroke: #e0b45f; }
 .protocol-edge .react-flow__edge-text { fill: #eaf4ff; font-size: 11px; }
 .protocol-edge .react-flow__edge-textbg { fill: rgba(7, 19, 28, 0.92); }
 

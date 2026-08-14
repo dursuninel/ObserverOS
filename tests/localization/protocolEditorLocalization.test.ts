@@ -2,8 +2,18 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { COMPARE_OPERATORS, PROTOCOL_NODE_KINDS } from '../../src/game/domain/protocol/Protocol';
+import { STARTER_PROTOCOLS } from '../../src/game/content/protocols/starterProtocols';
+import {
+  COMPARE_OPERATORS,
+  PROTOCOL_ERROR_CODES,
+  PROTOCOL_NODE_KINDS,
+  PROTOCOL_WARNING_CODES,
+} from '../../src/game/domain/protocol/Protocol';
+import { PHASE_FIVE_PROTOCOL_LIMITS, PHASE_THREE_BASELINE_CONFIG } from '../../src/game/simulation/SimulationConfig';
+import { buildProtocolCapabilities } from '../../src/game/simulation/protocol/protocolCapabilityBridge';
 import { PROTOCOL_CONNECTION_REJECTIONS } from '../../src/game/ui/protocols/graph/protocolConnectionRules';
+import { createEditorNode } from '../../src/game/ui/protocols/graph/protocolEditorModel';
+import { protocolNodeFields } from '../../src/game/ui/protocols/graph/protocolNodeFields';
 import { i18n } from '../../src/localization/i18n';
 import { tr } from '../../src/localization/tr';
 
@@ -56,8 +66,49 @@ describe('protocol editor localization', () => {
       'protocolEditor.zoomLevel', 'protocolEditor.fitView', 'protocolEditor.palette.title',
       'protocolEditor.detail.title', 'protocolEditor.detail.empty', 'protocolEditor.detail.delete',
       'protocolEditor.edge.yes', 'protocolEditor.edge.no', 'protocolManager.card.edit',
+      'protocolEditor.actions.check', 'protocolEditor.actions.apply', 'protocolEditor.actions.saveDraft',
+      'protocolEditor.unsaved', 'protocolEditor.check.clean', 'protocolEditor.check.problems',
+      'protocolEditor.check.warnings', 'protocolEditor.check.warningsHint', 'protocolEditor.check.more',
+      'protocolEditor.check.dismiss', 'protocolEditor.check.focus',
+      'protocolEditor.apply.blockedUnchecked', 'protocolEditor.apply.blockedInvalid',
+      'protocolEditor.apply.done', 'protocolEditor.apply.savedDraft',
+      'protocolEditor.finding.error', 'protocolEditor.finding.warning',
     ]) {
       expect(i18n.exists(key, { lng: 'tr' }), key).toBe(true);
+    }
+  });
+
+  it('has a selection wording for every compare operator (§12.3)', () => {
+    for (const key of OPERATOR_KEYS) {
+      expect(i18n.exists(`protocolEditor.operatorChoice.${key}`, { lng: 'tr' }), key).toBe(true);
+    }
+  });
+
+  it('resolves every settings field label, help and option a node can show', () => {
+    const capabilities = buildProtocolCapabilities({
+      definitions: PHASE_THREE_BASELINE_CONFIG.facilities,
+      limits: PHASE_FIVE_PROTOCOL_LIMITS,
+      protocols: STARTER_PROTOCOLS,
+    });
+    const t = (key: string, params?: Readonly<Record<string, string | number>>): string => i18n.t(key, params ?? {});
+    const leaked: string[] = [];
+    for (const kind of PROTOCOL_NODE_KINDS) {
+      for (const field of protocolNodeFields(createEditorNode(kind, `${kind}-1`, PHASE_FIVE_PROTOCOL_LIMITS), capabilities, t)) {
+        const texts = [field.label, field.help ?? '', field.suffix ?? '', ...(field.options ?? []).map((choice) => choice.label)];
+        for (const text of texts) {
+          if (text.includes('protocolEditor.') || text.includes('protocolManager.')) leaked.push(`${kind}/${field.id}: ${text}`);
+        }
+      }
+    }
+    expect(leaked).toEqual([]);
+  });
+
+  it('gives every validation finding a Turkish sentence instead of its code', () => {
+    for (const code of [...PROTOCOL_ERROR_CODES, ...PROTOCOL_WARNING_CODES]) {
+      const text = i18n.t(code);
+      expect(text, code).not.toBe(code);
+      expect(text.includes('protocol.'), code).toBe(false);
+      expect(text.length, code).toBeGreaterThan(10);
     }
   });
 
@@ -78,6 +129,9 @@ describe('protocol editor localization', () => {
       'src/game/ui/protocols/graph/protocolConnectionRules.ts',
       'src/game/ui/protocols/graph/protocolFlowView.ts',
       'src/game/ui/protocols/graph/protocolNodePresentation.ts',
+      'src/game/ui/protocols/graph/protocolNodeFields.ts',
+      'src/game/ui/protocols/graph/ProtocolNodeSettings.tsx',
+      'src/game/ui/protocols/protocolDraftModel.ts',
       'src/game/ui/protocols/ProtocolEditorRoute.tsx',
     ];
     // Türkçe'ye özgü harfler yalnız açıklama satırlarında geçebilir; JSX/dize içinde geçemez.

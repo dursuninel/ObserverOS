@@ -29,6 +29,32 @@ const LIFECYCLE_RANK: Readonly<Record<ProtocolLifecycle, number>> = Object.freez
   archived: 4,
 });
 
+/** Yeni protokol kimliği: aynı kitaplık her zaman aynı sıradaki boş numarayı verir. */
+export function nextProtocolId(protocols: readonly ProtocolDefinition[]): string {
+  const taken = new Set(protocols.map((protocol) => protocol.id));
+  let index = 1;
+  while (taken.has(`protokol-${index}`)) index += 1;
+  return `protokol-${index}`;
+}
+
+/**
+ * Boş taslak (spec §11: her protokol `draft` doğar).
+ *
+ * Düğüm UYDURULMAZ — oyuncu paletten kendisi ekler; adı da UI metni değil oyuncu
+ * içeriğidir, bu yüzden çağıran taraftan gelir.
+ */
+export function createProtocolDraftDefinition(id: string, name: string): ProtocolDefinition {
+  return Object.freeze({
+    edges: Object.freeze([]),
+    id,
+    lifecycle: 'draft',
+    name,
+    nodes: Object.freeze([]),
+    priority: 'normal',
+    version: 1,
+  });
+}
+
 export interface ProtocolCardModel {
   readonly affectedFacilityIds: readonly string[];
   readonly affectedFacilityLabels: readonly string[];

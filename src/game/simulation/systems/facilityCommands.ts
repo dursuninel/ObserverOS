@@ -29,7 +29,8 @@ export interface MutableFacilityState {
   workPriority: Priority;
 }
 
-const PLAYER_OPERATING_TARGETS: readonly FacilityOperatingState[] = ['offline', 'online', 'standby'];
+/** Oyuncunun (ve protokolün) doğrudan hedefleyebildiği çalışma durumları. */
+export const PLAYER_OPERATING_TARGETS: readonly FacilityOperatingState[] = ['offline', 'online', 'standby'];
 
 function isFacilityMode(value: unknown): value is FacilityMode {
   return typeof value === 'string' && FACILITY_MODES.includes(value as FacilityMode);

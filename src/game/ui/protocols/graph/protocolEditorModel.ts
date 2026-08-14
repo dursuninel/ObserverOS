@@ -5,6 +5,7 @@ import type {
   ProtocolNodeKind,
   ProtocolValidationLimits,
 } from '../../../domain/protocol/Protocol';
+import { protocolInputPorts, protocolOutputPorts } from '../../../simulation/protocol/protocolValidator';
 import {
   evaluateProtocolConnection,
   type ProtocolConnectionCandidate,
@@ -67,6 +68,26 @@ export function createEditorNode(
 
 export function addProtocolNode(definition: ProtocolDefinition, node: ProtocolNode): ProtocolDefinition {
   return Object.freeze({ ...definition, nodes: Object.freeze([...definition.nodes, node]) });
+}
+
+/**
+ * Bir düğümün alanlarını değiştirir.
+ *
+ * Düğümün bağlantı noktası şeması alanlara bağlı olabildiği için (Karşılaştır'ın
+ * `İkinci değer` girişi sabit değer seçilince kaybolur) artık var olmayan uçlara
+ * bağlı kenarlar da düşer — aksi hâlde düzenleyicide kurulamayan bir kenar
+ * doğrulamada `edge-port-incompatible` olarak geri gelirdi.
+ */
+export function updateProtocolNode(definition: ProtocolDefinition, node: ProtocolNode): ProtocolDefinition {
+  const inputs = protocolInputPorts(node);
+  const outputs = protocolOutputPorts(node);
+  return Object.freeze({
+    ...definition,
+    edges: Object.freeze(definition.edges.filter((edge) =>
+      (edge.to.nodeId !== node.id || inputs.has(edge.to.port))
+      && (edge.from.nodeId !== node.id || outputs.has(edge.from.port)))),
+    nodes: Object.freeze(definition.nodes.map((entry) => (entry.id === node.id ? node : entry))),
+  });
 }
 
 /** Düğüm silinince ona bağlı bütün bağlantılar da düşer; yetim kenar kalmaz. */

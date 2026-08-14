@@ -1,0 +1,32 @@
+1) PROTOKOLLER acildi · <title>="Gözlemci İşletim Sistemi"
+  [ekran] 01-manager.png
+2) Yeni protokol olusturuldu · url=http://localhost:5173/protocols/protokol-1
+   durum rozeti="Taslak"
+  [ekran] 02-yeni-bos-protokol.png
+3) Kontrol Et oncesi Uygula kapali mi: true
+   kapali olma gerekcesi="Önce Kontrol Et ile doğrulayın."
+   sonuc="1 sorun bulunduProtokolde başlangıç tetikleyicisi yok; otomasyon kendiliğinden başlayamaz.Sonucu kapat"
+   Uygula hala kapali mi: true
+  [ekran] 03-kontrol-et-bos-graf.png
+4) Tetikleyici alanlari secildi (Maden · kondisyon · altina duserse · 99)
+  [ekran] 04-tetikleyici-alanlari.png
+5) Eylem alanlari secildi (Maden · calisma modu · Eco)
+  [ekran] 05-eylem-alanlari.png
+6) Gecersiz baglanti denendi · aciklama="Bu iki bağlantı noktası farklı türde bilgi taşıyor; birbirine bağlanamaz."
+   kurulan baglanti sayisi=0
+  [ekran] 06-gecersiz-baglanti-turkce.png
+   fazla dugum silindi
+7) Gecerli baglanti kuruldu · baglanti sayisi=1
+8) Kontrol Et="Protokol uygulanmaya hazır."
+   Uygula acildi mi: true
+  [ekran] 07-kontrol-et-temiz.png
+9) Uygula sonucu="Protokol uygulandı; simülasyonda çalışmaya başladı."
+   durum rozeti="Aktif"
+  [ekran] 08-uygulandi.png
+10) Uygula sonrasi saat: 10 -> 33 sim. dk. · durum="ÇALIŞIYOR"
+  [ekran] 09-simulasyon-duraklamadi.png
+11) Maden modu="Eco (Tasarruf)" (sim. dk. 243) — protokol komutu yetkili duruma islendi
+  [ekran] 10-koloni-maden-eco.png
+12) Kart "SON CALISMA"="Tetiklendi · 1. gün 04:01"
+  [ekran] 11-manager-son-calisma.png
+13) Konsol hatasi sayisi=1 :: Failed to load resource: the server responded with a status of 404 (Not Found)
