@@ -721,3 +721,301 @@ select {
   .safe-mask-right { bottom: 38%; right: 0; top: 0; width: 100%; }
   .safe-mask-bottom { bottom: 38%; height: 64px; left: 0; right: 0; }
 }
+
+/* ---------------------------------------------------------------------------
+   PROTOKOL DÜZENLEYİCİ (Faz 6/2)
+   Token'lar ve ölçüler: docs/design/faz6-protokol-duzenleyici.md §3, §8, §9, §10, §11.
+   Kimlik rengi yalnız 3 px şerit + ikonda görünür; kart gövdesi bütün türlerde aynıdır.
+   --------------------------------------------------------------------------- */
+:root {
+  --protocol-canvas-base: #081521;
+  --protocol-canvas-dot: rgba(120, 170, 205, 0.12);
+  --protocol-node-surface: rgba(16, 34, 48, 0.94);
+  --protocol-node-header: rgba(23, 48, 63, 0.96);
+  --protocol-node-border: #467190;
+  --protocol-node-border-hover: #5a8aab;
+  --protocol-node-border-selected: #4abeff;
+  --protocol-panel-border: #406884;
+  --protocol-panel-separator: #24404f;
+  --protocol-field-surface: #0e2130;
+  --protocol-edge-flow: rgba(57, 191, 255, 0.7);
+  --protocol-edge-value: rgba(63, 182, 174, 0.7);
+  --protocol-edge-negative: rgba(157, 183, 200, 0.62);
+  --protocol-text-faint: #8199a8;
+  --protocol-accent: #39bfff;
+  --protocol-danger: #e45d5d;
+  --protocol-glow-selected: 0 0 0 1px rgba(74, 190, 255, 0.55), 0 0 18px rgba(57, 191, 255, 0.1);
+  --protocol-id-trigger: #39bfff;
+  --protocol-id-sensor: #3fb6ae;
+  --protocol-id-compare: #6aa9f0;
+  --protocol-id-and: #6aa9f0;
+  --protocol-id-delay: #9db7c8;
+  --protocol-id-action: #f0a94c;
+}
+
+.protocol-card-edit {
+  align-self: flex-start;
+  border: 1px solid var(--protocol-panel-border);
+  border-radius: 0.75rem;
+  color: #eaf4ff;
+  padding: 0.45rem 0.9rem;
+  text-decoration: none;
+}
+
+.protocol-card-edit:hover { border-color: var(--protocol-node-border-hover); }
+
+.protocol-editor {
+  display: grid;
+  gap: 0;
+  grid-template-rows: 64px 1fr auto;
+  height: 100%;
+  min-height: 32rem;
+}
+
+.protocol-editor-bar {
+  align-items: center;
+  border-bottom: 1px solid var(--protocol-panel-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.protocol-editor-identity {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.protocol-editor-identity h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.protocol-editor-back { color: var(--cyan); text-decoration: none; }
+
+.protocol-editor-viewport {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.protocol-editor-viewport button {
+  background: transparent;
+  border: 1px solid var(--protocol-panel-border);
+  border-radius: 0.75rem;
+  color: #eaf4ff;
+  cursor: pointer;
+  min-height: 40px;
+  padding: 0 0.7rem;
+}
+
+.protocol-editor-viewport button:hover { border-color: var(--protocol-node-border-hover); }
+.protocol-editor-viewport span { color: #9db7c8; min-width: 3.5rem; text-align: center; }
+
+.protocol-editor-stage {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  min-height: 0;
+}
+
+.protocol-editor-canvas {
+  background: var(--protocol-canvas-base);
+  min-height: 28rem;
+  position: relative;
+}
+
+.protocol-editor-detail {
+  border-left: 1px solid var(--protocol-panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.protocol-editor-detail h2 {
+  font-size: 1.125rem;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.protocol-editor-detail-empty,
+.protocol-editor-detail-description { color: #9db7c8; margin: 0; }
+.protocol-editor-detail-type { font-weight: 600; margin: 0 0 4px; }
+.protocol-editor-detail-line { color: #eaf4ff; margin: 4px 0 0; }
+
+.protocol-editor-delete {
+  background: transparent;
+  border: 1px solid var(--protocol-danger);
+  border-radius: 0.75rem;
+  color: var(--protocol-danger);
+  cursor: pointer;
+  margin-top: 24px;
+  min-height: 44px;
+  width: 100%;
+}
+
+.protocol-editor-notice {
+  border-top: 1px solid var(--protocol-panel-separator);
+  color: #f0d29a;
+  margin: 0;
+  min-height: 2.25rem;
+  padding: 0.5rem 16px;
+}
+
+/* Düğüm paleti — kapalı liste, 6 satır (§8). */
+.protocol-palette {
+  background: rgba(10, 28, 40, 0.9);
+  border: 1px solid var(--protocol-panel-border);
+  border-radius: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  width: 200px;
+}
+
+.protocol-palette-title {
+  color: var(--protocol-text-faint);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  margin: 0 0 4px;
+  padding: 0 4px;
+}
+
+.protocol-palette-item {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 0.5rem;
+  color: #eaf4ff;
+  cursor: pointer;
+  min-height: 40px;
+  text-align: left;
+  padding: 0 8px;
+}
+
+.protocol-palette-item:hover { background: rgba(84, 154, 195, 0.1); }
+.protocol-palette-item[data-kind='trigger'] { border-left-color: var(--protocol-id-trigger); }
+.protocol-palette-item[data-kind='sensor'] { border-left-color: var(--protocol-id-sensor); }
+.protocol-palette-item[data-kind='compare'] { border-left-color: var(--protocol-id-compare); }
+.protocol-palette-item[data-kind='and'] { border-left-color: var(--protocol-id-and); }
+.protocol-palette-item[data-kind='delay'] { border-left-color: var(--protocol-id-delay); }
+.protocol-palette-item[data-kind='action'] { border-left-color: var(--protocol-id-action); }
+
+/* Node kartı — tek iskelet (§9.4). */
+.protocol-node {
+  background: var(--protocol-node-surface);
+  border: 1px solid var(--protocol-node-border);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  color: #eaf4ff;
+  position: relative;
+}
+
+.protocol-node[data-selected='true'] {
+  border-color: var(--protocol-node-border-selected);
+  border-width: 1.5px;
+  box-shadow: var(--protocol-glow-selected);
+}
+
+.protocol-node:hover { border-color: var(--protocol-node-border-hover); }
+
+.protocol-node-identity {
+  border-radius: 14px 0 0 14px;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 3px;
+}
+
+.protocol-node[data-kind='trigger'] .protocol-node-identity { background: var(--protocol-id-trigger); }
+.protocol-node[data-kind='sensor'] .protocol-node-identity { background: var(--protocol-id-sensor); }
+.protocol-node[data-kind='compare'] .protocol-node-identity { background: var(--protocol-id-compare); }
+.protocol-node[data-kind='and'] .protocol-node-identity { background: var(--protocol-id-and); }
+.protocol-node[data-kind='delay'] .protocol-node-identity { background: var(--protocol-id-delay); }
+.protocol-node[data-kind='action'] .protocol-node-identity { background: var(--protocol-id-action); }
+
+.protocol-node-head {
+  align-items: center;
+  background: var(--protocol-node-header);
+  border-radius: 14px 14px 0 0;
+  display: flex;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 15px;
+}
+
+.protocol-node[data-kind='trigger'] .protocol-node-icon { color: var(--protocol-id-trigger); }
+.protocol-node[data-kind='sensor'] .protocol-node-icon { color: var(--protocol-id-sensor); }
+.protocol-node[data-kind='compare'] .protocol-node-icon { color: var(--protocol-id-compare); }
+.protocol-node[data-kind='and'] .protocol-node-icon { color: var(--protocol-id-and); }
+.protocol-node[data-kind='delay'] .protocol-node-icon { color: var(--protocol-id-delay); }
+.protocol-node[data-kind='action'] .protocol-node-icon { color: var(--protocol-id-action); }
+
+.protocol-node-type {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.protocol-node-body { padding: 8px 12px 0 15px; }
+
+.protocol-node-line {
+  color: #9db7c8;
+  font-size: 0.8125rem;
+  line-height: 18px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Portlar (§10.2): 10 px görünür nokta, 24 px işaretçi hitbox. */
+.protocol-port {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  transform: translateY(-50%);
+}
+
+.protocol-port-in { left: 0; padding-left: 10px; }
+.protocol-port-out { flex-direction: row-reverse; padding-right: 10px; right: 0; }
+
+.protocol-port-label {
+  color: var(--protocol-text-faint);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.protocol-node .react-flow__handle.protocol-port-dot {
+  background: var(--protocol-accent);
+  border: 2px solid var(--protocol-canvas-base);
+  height: 10px;
+  min-height: 10px;
+  min-width: 10px;
+  width: 10px;
+}
+
+.protocol-node .react-flow__handle.protocol-port-dot::after {
+  content: '';
+  inset: -7px;
+  position: absolute;
+}
+
+/* Kenarlar (§11.1): renk + çizgi stili + etiket — üç kanal. */
+.protocol-edge .react-flow__edge-path { stroke: var(--protocol-edge-flow); stroke-width: 1.5; }
+.protocol-edge-value .react-flow__edge-path { stroke: var(--protocol-edge-value); stroke-dasharray: 2 3; stroke-width: 1.25; }
+.protocol-edge-no .react-flow__edge-path { stroke: var(--protocol-edge-negative); stroke-dasharray: 6 4; }
+.protocol-edge .react-flow__edge-text { fill: #eaf4ff; font-size: 11px; }
+.protocol-edge .react-flow__edge-textbg { fill: rgba(7, 19, 28, 0.92); }
+
+@media (max-width: 1023px) {
+  /* §5.3: yığılmış düzen — sağ panel canvas'ın altına iner. */
+  .protocol-editor-stage { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .protocol-editor-detail { border-left: 0; border-top: 1px solid var(--protocol-panel-border); }
+}

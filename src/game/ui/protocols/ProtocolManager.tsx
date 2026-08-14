@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useSimulationEngine, useSimulationSnapshot } from '../../../app/providers/simulationContext';
@@ -62,6 +63,9 @@ function ProtocolCard({ card, t }: { readonly card: ProtocolCardModel; readonly 
           <dd data-testid="protocol-card-last-run">{formatLastExecution(card.lastExecution, LOCAL_DAY_MINUTES, t)}</dd>
         </div>
       </dl>
+      <Link className="protocol-card-edit" data-testid={`protocol-card-edit-${card.id}`} to={`/protocols/${card.id}`}>
+        {t('protocolManager.card.edit')}
+      </Link>
     </article>
   );
 }

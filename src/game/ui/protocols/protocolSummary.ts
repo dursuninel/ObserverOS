@@ -149,6 +149,65 @@ export function describeProtocol(definition: ProtocolDefinition, t: ProtocolTran
   return t('protocolManager.summary.sentence', { body: parts.join(' ') });
 }
 
+/**
+ * Graph editor node kartının özet satırları (§9.2, §9.3).
+ *
+ * Manager özetiyle aynı sözlükten beslenir; tür başına 0–2 satır üretir ve hiçbir
+ * satırda teknik kimlik (node id, port adı, `boolean`) geçmez. Değer atanmamışsa
+ * satır "seçilmedi" karşılığına düşer, boş bırakılmaz.
+ */
+export function describeProtocolNode(
+  definition: ProtocolDefinition,
+  node: ProtocolNode,
+  t: ProtocolTranslate,
+): readonly string[] {
+  /** Yeni eklenen düğümde ölçüm/eylem henüz seçilmemiştir; boş kimlik metne dönüşmez. */
+  const measurement = (sensorId: string, facilityId: string | undefined): string =>
+    (sensorId === '' ? t('protocolEditor.card.unsetMeasurement') : measurementLabel(t, sensorId, facilityId));
+
+  switch (node.kind) {
+    case 'trigger':
+      return Object.freeze([
+        measurement(node.sensorId, node.facilityId),
+        t(`protocolEditor.card.condition.${OPERATOR_KEYS[node.operator]}`, {
+          value: literalLabel(t, node.threshold, undefined),
+        }),
+      ]);
+    case 'sensor':
+      return Object.freeze([measurement(node.sensorId, node.facilityId)]);
+    case 'compare': {
+      if (node.comparand === undefined) return Object.freeze([t('protocolEditor.card.compareTwoValues')]);
+      const measurement = comparedMeasurement(definition, node.id, t);
+      return Object.freeze([
+        measurement === undefined
+          ? t(`protocolEditor.card.condition.${OPERATOR_KEYS[node.operator]}`, {
+            value: literalLabel(t, node.comparand, undefined),
+          })
+          : t(`protocolManager.summary.condition.${OPERATOR_KEYS[node.operator]}`, {
+            measurement,
+            value: literalLabel(t, node.comparand, undefined),
+          }),
+      ]);
+    }
+    case 'and':
+      return Object.freeze([]);
+    case 'delay':
+      return Object.freeze([t('protocolEditor.card.delay', { minutes: node.durationMinutes })]);
+    case 'action':
+      return Object.freeze([
+        node.facilityId === undefined ? t('protocolManager.summary.unassignedFacility') : facilityLabel(t, node.facilityId),
+        t('protocolEditor.card.action', {
+          setting: node.actionId === ''
+            ? t('protocolEditor.card.unsetSetting')
+            : t(`protocolEditor.setting.${node.actionId}`, { defaultValue: node.actionId }),
+          value: node.value === undefined
+            ? t('protocolManager.summary.unsetValue')
+            : literalLabel(t, node.value, ACTION_VALUE_GROUPS[node.actionId]),
+        }),
+      ]);
+  }
+}
+
 /** Kartın "etkilenen sistemler" alanı: eylemi olan tesisler, sonra ölçüm alınan tesisler. */
 export function affectedFacilityIds(definition: ProtocolDefinition): readonly string[] {
   const acting: string[] = [];

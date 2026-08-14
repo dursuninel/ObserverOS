@@ -21,8 +21,16 @@ import {
  * üzerinden çözülür.
  */
 
-/** `value`: tipi capability'den çözülemeyen serbest değer portu. */
-type PortType = ProtocolPortType | 'value';
+/**
+ * `value`: tipi capability'den çözülemeyen serbest değer portu.
+ *
+ * Port şeması ve tip uyum kuralı düzenleyici tarafından da kullanılır (§14.2:
+ * geçersiz bağlantı kurulmadan engellenir). Bu yüzden tek kaynak buradadır ve
+ * `protocolInputPorts` / `protocolOutputPorts` / `arePortTypesCompatible` olarak
+ * dışa açılır — editör kendi kopyasını tutmaz.
+ */
+export type ProtocolResolvedPortType = ProtocolPortType | 'value';
+type PortType = ProtocolResolvedPortType;
 
 interface MutableFinding {
   readonly code: ProtocolFindingCode;
@@ -39,7 +47,7 @@ function byId(left: { readonly id: string }, right: { readonly id: string }): nu
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
-function inputPorts(node: ProtocolNode): ReadonlyMap<string, PortType> {
+export function protocolInputPorts(node: ProtocolNode): ReadonlyMap<string, PortType> {
   switch (node.kind) {
     case 'trigger':
     case 'sensor':
@@ -57,7 +65,7 @@ function inputPorts(node: ProtocolNode): ReadonlyMap<string, PortType> {
   }
 }
 
-function outputPorts(node: ProtocolNode, capabilities?: ProtocolCapabilities): ReadonlyMap<string, PortType> {
+export function protocolOutputPorts(node: ProtocolNode, capabilities?: ProtocolCapabilities): ReadonlyMap<string, PortType> {
   switch (node.kind) {
     case 'trigger':
       return new Map<string, PortType>([['out', 'flow']]);
@@ -73,6 +81,16 @@ function outputPorts(node: ProtocolNode, capabilities?: ProtocolCapabilities): R
     case 'action':
       return new Map();
   }
+}
+
+/**
+ * §53.1 port tip uyumu: implicit dönüşüm yoktur. Tipi çözülememiş serbest değer
+ * portu (`value`) yalnız akış portuna bağlanamaz; iki değer portu birbirini kabul eder.
+ */
+export function arePortTypesCompatible(sourceType: PortType, targetType: PortType): boolean {
+  if (targetType === 'value') return sourceType !== 'flow';
+  if (sourceType === 'value') return targetType !== 'flow';
+  return sourceType === targetType;
 }
 
 function literalMatchesType(literal: ProtocolLiteral, type: ProtocolValueType): boolean {
@@ -151,8 +169,8 @@ export function validateProtocol(
   const nodes = [...definition.nodes].sort(byId);
   const edges = [...definition.edges].sort(byId);
   const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
-  const inputSchemas = new Map(nodes.map((node) => [node.id, inputPorts(node)] as const));
-  const outputSchemas = new Map(nodes.map((node) => [node.id, outputPorts(node, capabilities)] as const));
+  const inputSchemas = new Map(nodes.map((node) => [node.id, protocolInputPorts(node)] as const));
+  const outputSchemas = new Map(nodes.map((node) => [node.id, protocolOutputPorts(node, capabilities)] as const));
 
   const incomingSourceType = new Map<string, PortType>();
   const incomingSourceNodeId = new Map<string, string>();
@@ -174,11 +192,7 @@ export function validateProtocol(
       continue;
     }
 
-    if (targetType === 'value') {
-      if (sourceType === 'flow') add('protocol.error.edge-port-incompatible', 'error', { edgeId: edge.id });
-    } else if (sourceType === 'value') {
-      if (targetType === 'flow') add('protocol.error.edge-port-incompatible', 'error', { edgeId: edge.id });
-    } else if (sourceType !== targetType) {
+    if (!arePortTypesCompatible(sourceType, targetType)) {
       add('protocol.error.edge-port-incompatible', 'error', { edgeId: edge.id });
     }
 
