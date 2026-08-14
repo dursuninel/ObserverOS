@@ -406,6 +406,21 @@ select {
   position: absolute;
 }
 
+.layout-generation-fallback {
+  background: rgba(96, 46, 22, 0.86);
+  border: 1px solid #c2703c;
+  border-radius: 2px;
+  color: #f3d9c6;
+  font-size: 0.66rem;
+  left: 1rem;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  pointer-events: none;
+  position: absolute;
+  top: 1rem;
+  z-index: 9;
+}
+
 .safe-mask {
   align-items: center;
   background: rgba(255, 142, 80, 0.14);

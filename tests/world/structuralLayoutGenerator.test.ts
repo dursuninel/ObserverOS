@@ -5,12 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { PHASE_THREE_BASELINE_CONFIG } from '../../src/game/simulation/SimulationConfig';
 import { SimulationEngine } from '../../src/game/simulation/SimulationEngine';
 import { prototypeAssetRegistry } from '../../src/game/world/assets/prototypeAssetRegistry';
+import { COLONY_GROUND_VERTICES } from '../../src/game/world/layout/colonyGround';
 import { createDeterministicRng } from '../../src/game/world/layout/deterministicRng';
 import { calculateStructuralDifference, generateLayoutCandidates, generateZoneAnchors, runLayoutSeedSweep } from '../../src/game/world/layout/layoutGenerator';
 import { pointInRect, segmentIntersectsRect } from '../../src/game/world/layout/layoutMath';
 import { isNavigationConnected, validateGeneratedLayout } from '../../src/game/world/layout/layoutValidation';
 import { NIVALIS_LAYOUT_INTENT, NIVALIS_TERRAIN } from '../../src/game/world/layout/nivalisLayoutIntent';
-import type { GeneratedPlanetLayout, StructuralArchetypeId } from '../../src/game/world/layout/layoutTypes';
+import type { GeneratedPlanetLayout, Point2, StructuralArchetypeId } from '../../src/game/world/layout/layoutTypes';
 import { getVisualCompound } from '../../src/game/world/layout/visualCompoundProfiles';
 
 const generated = generateLayoutCandidates({ seed: 41_001 });
@@ -22,7 +23,32 @@ const byArchetype = (id: StructuralArchetypeId) => {
   return candidate;
 };
 const clone = (layout: GeneratedPlanetLayout): GeneratedPlanetLayout => structuredClone(layout);
+const distanceToSegment = (target: Point2, start: Point2, end: Point2): number => {
+  const deltaX = end[0] - start[0];
+  const deltaZ = end[1] - start[1];
+  const lengthSquared = deltaX * deltaX + deltaZ * deltaZ;
+  const ratio = lengthSquared < 1e-9 ? 0 : Math.min(1, Math.max(0, ((target[0] - start[0]) * deltaX + (target[1] - start[1]) * deltaZ) / lengthSquared));
+  return Math.hypot(target[0] - (start[0] + deltaX * ratio), target[1] - (start[1] + deltaZ * ratio));
+};
 const mainTopology = (layout: GeneratedPlanetLayout) => layout.navigationEdges.filter(({ role }) => role === 'main-spine').map(({ from, to }) => `${from}>${to}`).sort();
+// A designed main-spine link may be materialized as a chain through per-seed junction nodes, so
+// "directly connected" means: reachable over main-spine edges without passing another entity node.
+const linkedOnSpine = (layout: GeneratedPlanetLayout, from: string, to: string): boolean => {
+  const spineEdges = layout.navigationEdges.filter(({ role }) => role === 'main-spine');
+  const queue = [from];
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined || visited.has(current)) continue;
+    visited.add(current);
+    if (current !== from && !current.startsWith('spine-link-')) continue;
+    for (const edge of spineEdges) {
+      if (edge.from === current) queue.push(edge.to);
+      if (edge.to === current) queue.push(edge.from);
+    }
+  }
+  return visited.has(to);
+};
 
 describe('Faz 4 Test 2 structural layout generation', () => {
   it('1. Top 5 yalnız fixed-base jitter değildir', () => {
@@ -62,8 +88,8 @@ describe('Faz 4 Test 2 structural layout generation', () => {
     layout.navigationEdges.filter(({ role }) => role === 'main-spine').forEach(({ from, to }) => { degrees.set(from, (degrees.get(from) ?? 0) + 1); degrees.set(to, (degrees.get(to) ?? 0) + 1); });
     expect(Math.max(...degrees.values())).toBeGreaterThanOrEqual(3);
   });
-  it('9. offset hub batı expansion kolunu bağımsız bağlar', () => expect(mainTopology(byArchetype('offset-hub'))).toContain('spine-expansion>spine-solar'));
-  it('10. split core expansionı Habitat çekirdeğinden dallandırır', () => expect(mainTopology(byArchetype('split-core'))).toContain('spine-habitat>spine-expansion'));
+  it('9. offset hub batı expansion kolunu bağımsız bağlar', () => expect(linkedOnSpine(byArchetype('offset-hub'), 'spine-expansion', 'spine-solar')).toBe(true));
+  it('10. split core expansionı Habitat çekirdeğinden dallandırır', () => expect(linkedOnSpine(byArchetype('split-core'), 'spine-habitat', 'spine-expansion')).toBe(true));
   it('11. main spine z=0 hard-coded değildir', () => candidates.forEach((layout) => expect(new Set(layout.navigationNodes.filter(({ kind }) => kind === 'spine').map(({ position }) => position[1])).size).toBeGreaterThan(1)));
 
   it('12. Habitat visualVariant compound compositionı değiştirir', () => expect(new Set(candidates.map((layout) => layout.facilities.find(({ id }) => id === 'habitat')!.visualVariantId)).size).toBeGreaterThanOrEqual(3));
@@ -97,12 +123,20 @@ describe('Faz 4 Test 2 structural layout generation', () => {
   });
 
   it('19. Expansion birden fazla allowed spatial relationda üretilebilir', () => expect(new Set(candidates.map(({ structure }) => structure.expansionRelation)).size).toBeGreaterThanOrEqual(3));
-  it('20. Street-light pattern candidate road graphından türetilir', () => candidates.forEach((layout) => layout.streetLights.forEach((light) => { if (light.roadNodeId) expect(layout.navigationNodes.some(({ id }) => id === light.roadNodeId)).toBe(true); else expect(layout.roads.some((road) => road.points.slice(1, -1).some((point) => Math.hypot(point[0] + 0.55 - light.position[0], point[1] + 0.55 - light.position[1]) < 0.01))).toBe(true); })));
+  it('20. Street-light pattern candidate road graphından türetilir', () => candidates.forEach((layout) => layout.streetLights.forEach((light) => {
+    // Node-anchored lamps must name a real node; every other lamp must sit within the generator's
+    // maximum lateral offset of an actual main-spine polyline instead of on a fixed corner offset.
+    if (light.roadNodeId) { expect(layout.navigationNodes.some(({ id }) => id === light.roadNodeId)).toBe(true); return; }
+    const nearest = Math.min(...layout.roads.filter(({ role }) => role === 'main-spine').flatMap((road) => road.points.slice(1).map((end, index) => distanceToSegment(light.position, road.points[index] ?? end, end))));
+    expect(nearest).toBeLessThanOrEqual(1.6);
+  })));
   it('21. farklı structural aday farklı light positions üretir', () => expect(new Set(candidates.map((layout) => JSON.stringify(layout.streetLights.map(({ position }) => position)))).size).toBe(candidates.length));
   it('22. terrain visual footprint variant deterministic ve çeşitli kalır', () => {
     expect(generateLayoutCandidates({ seed: 41_001 })).toEqual(generated);
     expect(new Set(candidates.map(({ structure }) => structure.terrainVariant)).size).toBeGreaterThanOrEqual(3);
-    candidates.forEach((layout) => expect(layout.plateauVertices.length).toBeGreaterThanOrEqual(7));
+    // Zemin artık arazi varyantından TÜRETİLMEZ: her adayda sabit kare (bkz. colonyGround.test.ts).
+    // terrainVariant yalnız varyasyon planını ve imzayı besler.
+    candidates.forEach((layout) => expect(layout.plateauVertices).toEqual(COLONY_GROUND_VERTICES));
   });
   it('23. aynı seed aynı structural outputu üretir', () => expect(generateLayoutCandidates({ seed: 41_001 })).toEqual(generateLayoutCandidates({ seed: 41_001 })));
   it('24. yeni seed structural selections veya anchorları değiştirebilir', () => {
@@ -110,7 +144,42 @@ describe('Faz 4 Test 2 structural layout generation', () => {
     expect(other.status).toBe('success');
     if (other.status === 'success') expect(other.candidates.map((layout) => ({ signature: layout.structure.signature, positions: layout.facilities.map(({ position }) => position) }))).not.toEqual(candidates.map((layout) => ({ signature: layout.structure.signature, positions: layout.facilities.map(({ position }) => position) })));
   });
-  it('25. 100-seed sweep her seedde en az üç structural signature doğrular', () => expect(runLayoutSeedSweep(100)).toMatchObject({ testedSeeds: 100, valid: 100, failed: 0, minimumStructuralSignatures: 3 }));
+  it('25. 100-seed sweep her seedde en az üç structural signature doğrular', () => expect(runLayoutSeedSweep(100)).toMatchObject({ testedSeeds: 100, valid: 100, failed: 0, minimumStructuralSignatures: 3 }), 60_000);
+
+  it('25b. aynı arketip farklı seedlerde birebir aynı koordinat üretmemeli', () => {
+    // Regression test: ensure same archetype across different seeds has different facility coordinates
+    const results = new Map<string, { seed: number; positions: Record<string, Point2> }>();
+
+    for (let seed = 60_000; seed < 60_050; seed += 1) {
+      const gen = generateLayoutCandidates({ seed, internalCandidateCount: 50 });
+      if (gen.status !== 'failure') {
+        for (const candidate of gen.candidates) {
+          const archId = candidate.structure.archetype;
+          const posMap: Record<string, Point2> = {};
+          candidate.facilities.forEach(f => {
+            posMap[f.id] = f.position;
+          });
+
+          const key = `${archId}`;
+          if (!results.has(key)) {
+            results.set(key, { seed, positions: posMap });
+          } else {
+            const prev = results.get(key)!;
+            // Check if coordinates are EXACTLY identical (Bug indicator)
+            const coordsIdentical = Object.keys(posMap).every(id => {
+              const p1 = posMap[id];
+              const p2 = prev.positions[id];
+              return p1 && p2 && p1[0] === p2[0] && p1[1] === p2[1];
+            });
+
+            if (coordsIdentical) {
+              throw new Error(`REGRESSION: Archetype "${archId}" seed ${prev.seed} and ${seed} produce identical coordinates`);
+            }
+          }
+        }
+      }
+    }
+  }, 60_000);
   it('26. mevcut road/nav connectivity korunur ve yollar compoundlardan geçmez', () => candidates.forEach((layout) => {
     expect(isNavigationConnected(layout)).toBe(true);
     expect(validateGeneratedLayout(layout, NIVALIS_TERRAIN).valid).toBe(true);

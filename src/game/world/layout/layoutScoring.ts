@@ -1,4 +1,5 @@
 import { distance, projectedOverlapRatio, projectFacilitiesHeadless } from './layoutMath';
+import { LAYOUT_SCORE_WEIGHTS } from './nivalisLayoutIntent';
 import type { GeneratedPlanetLayout, LayoutScoreBreakdown, Point2 } from './layoutTypes';
 
 const clamp = (value: number, minimum = 0, maximum = 10) => Math.min(maximum, Math.max(minimum, value));
@@ -17,9 +18,16 @@ export function scoreGeneratedLayout(layout: GeneratedPlanetLayout): LayoutScore
   const safetySeparation = clamp((d(habitat, mine) - 6) * 1.2 + (d(habitat, reactor) - 5) * 0.9);
   const totalRoad = layout.roads.reduce((sum, road) => sum + roadLength(road.points), 0);
   const turns = layout.roads.reduce((sum, road) => sum + Math.max(0, road.points.length - 2), 0);
-  const roadQuality = clamp(10 - Math.max(0, totalRoad - 58) * 0.1 - turns * 0.2);
+  // Calibrated against the procedural generator's actual road distribution (total length p10..p90
+  // ~82..112, turns p10..p90 ~17..27). Free allowances sit at the p10 marks so the metric keeps
+  // discriminating across the realistic range instead of clamping every candidate to zero.
+  const roadQuality = clamp(10 - Math.max(0, totalRoad - 82) * 0.09 - Math.max(0, turns - 14) * 0.22);
   const boundsArea = (layout.cameraBounds.maxX - layout.cameraBounds.minX) * (layout.cameraBounds.maxZ - layout.cameraBounds.minZ);
-  const compactness = clamp(10 - Math.max(0, boundsArea - 380) / 45);
+  // Serbest alan payı jeneratörün gerçek dağılımına göre kalibre edilir. Eski 380/45 değeri
+  // Faz 3 sabit yerleşiminin alanına göre seçilmişti; üretilen adaylar 820..1220 aralığında
+  // olduğu için metrik HER adayda 0'a kırpılıyor ve seçime hiç katkı vermiyordu — yani
+  // jeneratörün derli toplu olma baskısı yoktu. Aralık gerçek dağılıma taşındı.
+  const compactness = clamp(10 - Math.max(0, boundsArea - 560) / 38);
   const visualComposition = clamp(10 - Math.abs((habitat?.position[0] ?? 0) - layout.cameraBounds.center[0]) * 0.35 - Math.abs((mine?.position[0] ?? 0) - (solar?.position[0] ?? 0) - 17) * 0.18);
   const expansion = layout.expansionSlots[0];
   const expansionAccess = clamp(expansion ? 10 - Math.abs(expansion.position[0] - (mine?.position[0] ?? 0)) * 0.25 : 0);
@@ -36,8 +44,11 @@ export function scoreGeneratedLayout(layout: GeneratedPlanetLayout): LayoutScore
 }
 
 export function totalLayoutScore(breakdown: LayoutScoreBreakdown): number {
-  const sum = breakdown.adjacency + breakdown.cameraReadability + breakdown.compactness
-    + breakdown.expansionAccess + breakdown.roadQuality + breakdown.safetySeparation
-    + breakdown.screenSpaceOverlap + breakdown.terrainUsage + breakdown.visualComposition;
-  return Number((sum / 9 * 10).toFixed(2));
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const [criterion, weight] of Object.entries(LAYOUT_SCORE_WEIGHTS)) {
+    weighted += breakdown[criterion as keyof LayoutScoreBreakdown] * weight;
+    totalWeight += weight;
+  }
+  return Number((weighted / totalWeight * 10).toFixed(2));
 }

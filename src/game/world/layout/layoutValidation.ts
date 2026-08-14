@@ -1,3 +1,4 @@
+import { COLONY_GROUND_VERTICES, colonyGroundViolations } from './colonyGround';
 import { generatedPlanetLayoutSchema } from './generatedLayoutSchema';
 import { pointInRect, projectedOverlapRatio, projectFacilitiesHeadless, rectContains, rectanglesOverlap, segmentIntersectsRect } from './layoutMath';
 import { NIVALIS_LAYOUT_INTENT, NIVALIS_PLACEMENT_PROFILES } from './nivalisLayoutIntent';
@@ -54,6 +55,10 @@ export function validateGeneratedLayout(layout: GeneratedPlanetLayout, terrain: 
       if (a && b && rectanglesOverlap(a.visualFootprint, b.visualFootprint, Math.max(NIVALIS_PLACEMENT_PROFILES[a.id].minimumSeparation, NIVALIS_PLACEMENT_PROFILES[b.id].minimumSeparation))) reasons.push(`facility-overlap:${a.id}:${b.id}`);
     }
   }
+  // `outside-buildable` yalnız terrain DİKDÖRTGENİNİ kontrol eder; ekranda render edilen zemin ise
+  // `plateauVertices`. Aday, gerçekten çizilen zeminin dışına taşmadığından ayrıca sorumludur.
+  if (layout.plateauVertices.length !== COLONY_GROUND_VERTICES.length || layout.plateauVertices.some((vertex, index) => vertex[0] !== COLONY_GROUND_VERTICES[index]?.[0] || vertex[1] !== COLONY_GROUND_VERTICES[index]?.[1])) reasons.push('ground-shape-mismatch');
+  reasons.push(...colonyGroundViolations(layout));
   if (!graphConnected(layout)) reasons.push('navigation-disconnected');
   if (layout.roads.length !== layout.navigationEdges.length) reasons.push('road-navigation-source-mismatch');
   for (const road of layout.roads) {

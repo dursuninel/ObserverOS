@@ -10,9 +10,11 @@ import { LayoutCandidatePanel } from './LayoutCandidatePanel';
 interface PrototypeDebugPanelProps {
   readonly candidates: readonly GeneratedPlanetLayout[];
   readonly inspection: RuntimeObjectInspection | null;
+  readonly layoutMode: 'generated' | 'prototype';
   readonly metrics: WorldMetrics;
   readonly onChange: (state: PrototypeDebugState) => void;
   readonly onCameraPreset: (preset: PrototypeDebugState['cameraPreset']) => void;
+  readonly onLayoutModeChange: (mode: 'generated' | 'prototype') => void;
   readonly onToggle: () => void;
   readonly onNewLayoutSeed: () => void;
   readonly onSelectCandidate: (index: number) => void;
@@ -22,7 +24,7 @@ interface PrototypeDebugPanelProps {
   readonly selectedCandidateIndex: number;
 }
 
-export function PrototypeDebugPanel({ candidates, inspection, metrics, onCameraPreset, onChange, onNewLayoutSeed, onSelectCandidate, onToggle, open, seedSweep, selectedCandidateIndex, state }: PrototypeDebugPanelProps) {
+export function PrototypeDebugPanel({ candidates, inspection, layoutMode, metrics, onCameraPreset, onChange, onLayoutModeChange, onNewLayoutSeed, onSelectCandidate, onToggle, open, seedSweep, selectedCandidateIndex, state }: PrototypeDebugPanelProps) {
   const { t } = useTranslation();
   const set = <Key extends keyof PrototypeDebugState>(key: Key, value: PrototypeDebugState[Key]) => onChange({ ...state, [key]: value });
   return (
@@ -30,7 +32,7 @@ export function PrototypeDebugPanel({ candidates, inspection, metrics, onCameraP
       <button aria-expanded={open} className="debug-panel-toggle" onClick={onToggle} type="button">{open ? t('prototype.debug.hide') : t('prototype.debug.show')}</button>
       {open && <>
       <div className="debug-panel-heading"><span>{t('prototype.debug.title')}</span><span className="prototype-badge">{t('prototype.debug.badge')}</span></div>
-      {import.meta.env.DEV && <LayoutCandidatePanel candidates={candidates} onNewSeed={onNewLayoutSeed} onSelect={onSelectCandidate} seedSweep={seedSweep} selectedIndex={selectedCandidateIndex} />}
+      {import.meta.env.DEV && <LayoutCandidatePanel candidates={candidates} onNewSeed={onNewLayoutSeed} onSelect={onSelectCandidate} onSelectDefault={() => onLayoutModeChange('prototype')} seedSweep={seedSweep} selectedIndex={selectedCandidateIndex} selectedMode={layoutMode} showDefaultOption />}
       <label>{t('prototype.debug.time')}<input max="1" min="0" onChange={(event) => set('timeOfDay', Number(event.target.value))} step="0.01" type="range" value={state.timeOfDay} /></label>
       <div className="debug-toggle-row">
         <label><input checked={state.snowEnabled} onChange={(event) => set('snowEnabled', event.target.checked)} type="checkbox" />{t('prototype.debug.snow')}</label>

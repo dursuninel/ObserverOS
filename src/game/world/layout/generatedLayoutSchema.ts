@@ -14,7 +14,8 @@ export const generatedPlanetLayoutSchema = z.object({
   expansionSlots: z.array(z.object({ accessNodeId: z.string().min(1), compatibility: z.array(z.string()), footprintCapacity: z.object({ depth: finite.positive(), width: finite.positive() }), id: z.literal('expansion'), position: point2, primaryAssetId: z.literal('expansion-pad'), rotationY: finite })),
   facilities: z.array(z.object({ entrance: point2, footprint: rect, id: facilityId, position: point2, primaryAssetId: z.string().min(1), rotationY: finite, serviceClearance: finite.nonnegative(), visualFootprint: rect, visualModules: z.array(visualModule), visualVariantId: z.string().min(1), workPoint: point2 })),
   generatorVersion: z.string().min(1),
-  plateauVertices: z.array(point2).min(6),
+  // Zemin sabit karedir (4 köşe); eski min(6) içerikten türetilen jitterli poligondan kalmaydı.
+  plateauVertices: z.array(point2).min(4),
   navigationEdges: z.array(z.object({ from: z.string().min(1), id: z.string().min(1), role: z.enum(['entrance-link', 'main-spine', 'service']), to: z.string().min(1) })),
   navigationNodes: z.array(z.object({ entityId: z.enum(['reactor', 'solar', 'battery', 'mine', 'habitat', 'oxygen', 'expansion']).optional(), id: z.string().min(1), kind: z.enum(['approach', 'entrance', 'spine']), position: point2 })),
   planetId: z.literal('nivalis-3-prototype'),

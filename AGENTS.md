@@ -197,4 +197,42 @@ Bitirmeden önce kendine sor:
 - Renderer veya UI'ya simulation truth koydum mu?
 - Testleri gerçekten çalıştırdım mı?
 
+---
+
+## 12. Commit mesajı formatı (ZORUNLU)
+
+GitHub'a atılan **her** commit/push bu formata uyar. İstisnası yoktur.
+
+```
+Faz <N> · <geçen>/<toplam> test - <tek satır özet>
+
+- <dosya yolu>: <o dosyada TAM olarak ne değişti>
+- <dosya yolu>: <o dosyada TAM olarak ne değişti>
+```
+
+**Başlık satırı:**
+- Faz numarası ve test sayısı başta gelir, ardından ` - ` ayıracı, sonra özet.
+- Test sayısı **gerçekten koşturulmuş** `npm test` çıktısından alınır. Tahmin edilmez,
+  bir önceki commit'ten kopyalanmaz. Test koşmadıysan commit atma.
+- Özet tek satır, ne yapıldığını söyler.
+
+**Gövde — her değişen dosya için AYRI bir satır:**
+- Commit'teki her dosya için bir madde olur; `git diff --name-only` çıktısıyla birebir örtüşür.
+- Her madde o dosyada **neyin** düzenlendiğini anlatır — "güncellendi", "düzeltildi" gibi
+  içi boş ifadeler değil, somut değişiklik. Mümkünse fonksiyon/prop/satır adı geçsin.
+- Dosyaları tek maddede gruplama ("UI dosyaları düzenlendi" YASAK).
+
+**Örnek:**
+
+```
+Faz 4 · 263/263 test - Default/prototype modunda /colony açılış çökmesi giderildi
+
+- src/game/ui/colony/LayoutCandidatePanel.tsx: prototype modunda null candidate deref
+  ediliyordu; skor/yapı türevleri null-safe hale getirildi, buton satırı her modda korundu
+- src/game/world/renderer/CameraRig.tsx: layout prop tipi `| null` yapıldı; cameraBounds
+  kullanan üç nokta PROTOTYPE_LAYOUT fallback'ine bağlandı
+- src/game/ui/colony/ColonyWorkspace.tsx: selectedLayout'tan sızan undefined `?? null` ile
+  normalize edildi (exactOptionalPropertyTypes)
+```
+
 Bir tanesine bile "evet" cevabı varsa görevi tamamlanmış sayma.

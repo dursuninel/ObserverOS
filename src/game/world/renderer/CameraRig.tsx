@@ -2,16 +2,16 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MathUtils, OrthographicCamera, Vector3 } from 'three';
 
-import { CAMERA_OFFSET, clampCameraTargetInScreenSpace, clampCameraZoom, getCameraPanLimits, getCameraPresetTarget, getCameraZoomRange, getLayoutOverviewZoom, mapScreenDragWithBasis } from '../prototype/cameraMath';
+import { CAMERA_OFFSET, clampCameraTargetInScreenSpace, clampCameraZoom, getCameraPanLimits, getCameraPresetTarget, getCameraZoomRange, getColonyGroundOverviewZoom, mapScreenDragWithBasis } from '../prototype/cameraMath';
 import { getSafeCameraTarget } from '../prototype/prototypeConfig';
 import type { CameraPreset } from '../prototype/types';
 import type { GeneratedPlanetLayout } from '../layout/layoutTypes';
 
-export function CameraRig({ layout, panelOpen, preset, resetToken }: { readonly layout: GeneratedPlanetLayout; readonly panelOpen: boolean; readonly preset: CameraPreset; readonly resetToken: number }) {
+export function CameraRig({ layout, panelOpen, preset, resetToken }: { readonly layout: GeneratedPlanetLayout | null; readonly panelOpen: boolean; readonly preset: CameraPreset; readonly resetToken: number }) {
   const { camera, gl, size } = useThree();
-  const target = useRef(new Vector3(...getCameraPresetTarget('overview', layout)));
-  const destination = useRef(new Vector3(...getCameraPresetTarget('overview', layout)));
-  const desiredZoom = useRef(40);
+  const target = useRef(new Vector3(...getCameraPresetTarget('overview', layout ?? undefined)));
+  const destination = useRef(new Vector3(...getCameraPresetTarget('overview', layout ?? undefined)));
+  const desiredZoom = useRef(30);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const previousPinchDistance = useRef<number | null>(null);
   const cameraRight = useRef(new Vector3());
@@ -21,12 +21,13 @@ export function CameraRig({ layout, panelOpen, preset, resetToken }: { readonly 
   const panClampOrigin = useRef(new Vector3());
 
   useEffect(() => {
-    const safeTarget = getSafeCameraTarget(getCameraPresetTarget(preset, layout), size.width, size.height, panelOpen);
+    const safeTarget = getSafeCameraTarget(getCameraPresetTarget(preset, layout ?? undefined), size.width, size.height, panelOpen);
     const range = getCameraZoomRange(size.width, panelOpen);
     target.current.set(...safeTarget);
     destination.current.set(...safeTarget);
     panClampOrigin.current.set(...safeTarget);
-    desiredZoom.current = preset === 'overview' ? getLayoutOverviewZoom(size.width, size.height, panelOpen, layout.cameraBounds) : range.focus;
+    // Genel görünüm kadrajı sabit zemin karesinden gelir; aday değişimi yakınlaştırmayı oynatmaz.
+    desiredZoom.current = preset === 'overview' ? getColonyGroundOverviewZoom(size.width, size.height, panelOpen) : range.focus;
   }, [layout, panelOpen, preset, resetToken, size.height, size.width]);
 
   useEffect(() => {
@@ -71,7 +72,8 @@ export function CameraRig({ layout, panelOpen, preset, resetToken }: { readonly 
         right: [cameraRight.current.x, cameraRight.current.z] as const,
         up: [cameraUpOnGround.current.x, cameraUpOnGround.current.z] as const,
       };
-      const limits = getCameraPanLimits(size.width, size.height, zoom, panelOpen, basis, layout.cameraBounds);
+      // Kaydırma sınırı da zemin karesinden: aday başına farklı bir kaydırma alanı yok.
+      const limits = getCameraPanLimits(size.width, size.height, zoom, panelOpen, basis);
       const [clampedX, clampedZ] = clampCameraTargetInScreenSpace(
         [panStartTarget.current.x + panX, panStartTarget.current.z + panZ],
         [panClampOrigin.current.x, panClampOrigin.current.z],
@@ -105,7 +107,7 @@ export function CameraRig({ layout, panelOpen, preset, resetToken }: { readonly 
       element.removeEventListener('lostpointercapture', onPointerUp);
       element.removeEventListener('wheel', onWheel);
     };
-  }, [camera, gl, layout.cameraBounds, panelOpen, size.height, size.width]);
+  }, [camera, gl, panelOpen, size.height, size.width]);
 
   /* eslint-disable react-hooks/immutability -- R3F camera transforms are intentionally imperative inside the render loop. */
   useFrame(() => {
