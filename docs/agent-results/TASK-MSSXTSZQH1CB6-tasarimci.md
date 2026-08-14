@@ -224,9 +224,12 @@ docs/agent-results/TASK-MSSXTSZQH1CB6-tasarimci.md
 docs/design/faz6-protokol-duzenleyici.md
 
 > git commit …
-[phase-4-deterministic-layout f6c2c1f] Faz 6/T: Protokol Duzenleyici gorsel tasarim sistemi (spec 72.6)
+[phase-4-deterministic-layout f5f8ea2] Faz 6/T: Protokol Duzenleyici gorsel tasarim sistemi (spec 72.6)
  2 files changed, 912 insertions(+)
 ```
+
+Commit: **`f5f8ea2`** (branch `phase-4-deterministic-layout`). Bu rapordaki commit referansının kendisi küçük bir ek commit'le düzeltilmiştir.
+Commit'ten sonra `git status --short` doğrulandı: TASK-MSSXR0J9XIP7K'nın 11 dosyalık çalışması **olduğu gibi duruyor**, hiçbiri commit'e karışmadı.
 
 ---
 
