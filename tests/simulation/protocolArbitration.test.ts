@@ -24,7 +24,7 @@ import {
   type ProtocolArbitrationPlan,
 } from '../../src/game/simulation/protocol/protocolArbitration';
 import { compileProtocol, type ExecutableProtocol } from '../../src/game/simulation/protocol/protocolCompiler';
-import { createFacilityState, defaultSafetyInterlock, toReadonlyFacilityState } from '../../src/game/simulation/systems/facilityCommands';
+import { applyFacilityCommand, createFacilityState, defaultSafetyInterlock, toReadonlyFacilityState } from '../../src/game/simulation/systems/facilityCommands';
 import { i18n } from '../../src/localization/i18n';
 
 const MINE: FacilityDefinition = Object.freeze({
@@ -254,6 +254,77 @@ describe('protocol arbitration - safety interlock precedence (spec §13.10 step 
     expect(plan.rejections[0]?.facilityReasonCode).toBe('facility.unmapped-future-rule');
     expect(plan.rejections[0]?.reasonCode).toBeUndefined();
     expect(plan.rejections[0]?.status).toBe('blocked');
+  });
+});
+
+describe('protocol arbitration - ramp required is BLOCKED, not delayed (spec §53.7)', () => {
+  /**
+   * §53.7 `delayed` = "command KABUL EDİLDİ ancak hedef state hemen oluşmadı".
+   * Ramp isteyen tesiste mod değişimi bu tanıma girer mi? Cevap ÖLÇÜLDÜ: girmiyor —
+   * komut kabul edilmiyor, tesis rampa da girmiyor, state hiç değişmiyor. Bu §53.7'nin
+   * `blocked` tanımıdır ("Safety Interlock ... nedeniyle uygulamadı"). Ramp süresi/hedef
+   * state alanı gelene kadar `delayed` üretilirse İZ YALAN SÖYLER.
+   */
+  const REACTOR: FacilityDefinition = Object.freeze({
+    id: 'reactor-01',
+    initialCondition: 100,
+    initialMode: 'normal',
+    initialState: 'online',
+    modes: { boost: {}, eco: {}, normal: {} },
+    safety: { boostConditionMinimum: 30, requiresRampedModeChange: true },
+    typeId: 'fusion-reactor',
+  });
+
+  it('MEASUREMENT: the facility layer refuses the command and changes NOTHING', () => {
+    const state = createFacilityState(REACTOR);
+    const before = JSON.stringify(state);
+    const result = applyFacilityCommand(
+      { actuator: 'set-mode', facilityId: 'reactor-01', id: 'command-1', priority: 'normal', simTime: 10, value: 'eco' },
+      state,
+      REACTOR,
+      defaultSafetyInterlock,
+    );
+
+    expect(result).toEqual({ reasonCode: 'facility.ramp-config-required', requestId: 'command-1', status: 'blocked' });
+    // Kabul edilseydi mod (ya da bir ramp/hedef alanı) değişirdi; hiçbiri olmadı.
+    expect(state.mode).toBe('normal');
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it('reaches the protocol layer as blocked + SAFETY_RAMP_REQUIRED', () => {
+    const plan = arbitrateProtocolCommands({
+      definitions: new Map([['reactor-01', REACTOR]]),
+      facilities: new Map([['reactor-01', toReadonlyFacilityState(createFacilityState(REACTOR))]]),
+      interlock: defaultSafetyInterlock,
+      requests: [requestOf({ facilityId: 'reactor-01', value: 'eco' })],
+      resolveActuator: identityActuatorResolver,
+    });
+
+    expect(plan.commands).toEqual([]);
+    expect(plan.rejections).toHaveLength(1);
+    expect(plan.rejections[0]).toMatchObject({
+      facilityReasonCode: 'facility.ramp-config-required',
+      reasonCode: 'SAFETY_RAMP_REQUIRED',
+      status: 'blocked',
+    });
+    // §53.7 dörtlüsünde `delayed` yalnız KABUL EDİLEN komut içindir; bu komut reddedildi.
+    expect(plan.rejections[0]?.status).not.toBe('delayed');
+    expect(plan.rejections[0]?.appliedValue).toBeUndefined();
+  });
+
+  it('applies the same command to a facility WITHOUT the ramp rule (control measurement)', () => {
+    // Kontrol ölçümü: engel ramp kuralının kendisidir, mod değeri ya da fixture değil.
+    const withoutRamp: FacilityDefinition = { ...REACTOR, safety: { boostConditionMinimum: 30 } };
+    const state = createFacilityState(withoutRamp);
+    const result = applyFacilityCommand(
+      { actuator: 'set-mode', facilityId: 'reactor-01', id: 'command-2', priority: 'normal', simTime: 10, value: 'eco' },
+      state,
+      withoutRamp,
+      defaultSafetyInterlock,
+    );
+
+    expect(result).toEqual({ appliedValue: 'eco', requestId: 'command-2', status: 'applied' });
+    expect(state.mode).toBe('eco');
   });
 });
 

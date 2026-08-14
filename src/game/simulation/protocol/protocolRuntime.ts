@@ -158,6 +158,7 @@ export class ProtocolRuntime {
       // §13.2: delay sonrası değerlendirme O ANKİ state'i okur; eski snapshot taşınmaz.
       const context = this.createContext(protocol, entry.protocolExecutionId, input.readSensor, input.simTime);
       this.propagate(protocol, delayNode, 'out', context, input, requests);
+      this.finalizeTrace(context, input.simTime);
     }
 
     for (const protocol of [...input.protocols].sort((left, right) => compareStrings(left.id, right.id))) {
@@ -195,7 +196,11 @@ export class ProtocolRuntime {
       const executionId = this.nextExecutionId();
       const execution = this.createContext(protocol, executionId, input.readSensor, input.simTime);
       Object.assign(execution, { booleans, sensors: snapshot });
+      // §53.5: iz crossing'in KENDİSİYLE başlar; ölçülen değer "neden tetiklendi?"
+      // sorusunun cevabıdır ve başka hiçbir yerde saklanmaz.
+      recordStep(execution, 'trigger', trigger.id, 'out', undefined, observed);
       this.propagate(protocol, trigger, 'out', execution, input, requests);
+      this.finalizeTrace(execution, input.simTime);
     }
 
     return Object.freeze(requests);
@@ -232,26 +237,13 @@ export class ProtocolRuntime {
     };
   }
 
-  private recordStep(
-    context: ExecutionContext,
-    nodeKind: ProtocolNodeKind,
-    nodeId: string,
-    port: string,
-    simTime: number,
-    evaluationResult?: boolean,
-    sensorValue?: ProtocolLiteral,
-  ): void {
-    context.steps.push(Object.freeze({
-      timestamp: simTime,
-      nodeId,
-      nodeKind,
-      port,
-      ...(sensorValue === undefined ? {} : { sensorValue }),
-      ...(evaluationResult === undefined ? {} : { evaluationResult }),
-    }));
-  }
-
+  /**
+   * §53.5: segment izini kapatır. Kapanış TERMINUS'a değil segmentin sonuna bağlıdır —
+   * action/delay'e varamadan sönen execution (ör. sensör okunamadı) da iz bırakır;
+   * Debugger'ın "neden çalışmadı?" sorusu ancak o zaman cevaplanabilir (§48.3).
+   */
   private finalizeTrace(context: ExecutionContext, completedAt: number): void {
+    if (context.steps.length === 0) return;
     this.traces = [...this.traces, Object.freeze({
       protocolExecutionId: context.protocolExecutionId,
       protocolId: context.protocolId,
@@ -273,17 +265,16 @@ export class ProtocolRuntime {
     switch (node.kind) {
       case 'delay':
         // §13.5: simulation time ile bekler; wall clock kullanılmaz.
-        this.recordStep(context, 'delay', node.id, 'in', input.simTime);
+        recordStep(context, 'delay', node.id, 'in');
         this.scheduled = [...this.scheduled, Object.freeze({
           delayNodeId: node.id,
           protocolExecutionId: context.protocolExecutionId,
           protocolId: protocol.id,
           remainingMinutes: node.durationMinutes,
         })].sort((left, right) => compareStrings(left.protocolExecutionId, right.protocolExecutionId));
-        this.finalizeTrace(context, input.simTime);
         return;
       case 'action':
-        this.recordStep(context, 'action', node.id, 'in', input.simTime);
+        recordStep(context, 'action', node.id, 'in');
         requests.push(Object.freeze({
           actuator: node.actionId,
           ...(node.facilityId === undefined ? {} : { facilityId: node.facilityId }),
@@ -293,24 +284,22 @@ export class ProtocolRuntime {
           simTime: input.simTime,
           ...(node.value === undefined ? {} : { value: node.value }),
         }));
-        this.finalizeTrace(context, input.simTime);
         return;
       case 'compare':
       case 'and': {
-        // §13.3: instantaneous boolean evaluation; gizli memory yok.
+        // §13.3: instantaneous boolean evaluation; gizli memory yok. Adımı
+        // `evaluateBoolean` yazar — boolean node akıştan da, değer çekilerek de
+        // ziyaret edilebilir ve iz her iki yolu da aynı biçimde görür.
         const result = evaluateBoolean(context, target);
-        this.recordStep(context, node.kind, node.id, 'in', input.simTime, result);
         if (result === undefined) return;
         this.propagate(protocol, target, result ? 'whenTrue' : 'whenFalse', context, input, requests);
         return;
       }
-      case 'sensor': {
-        const sensorValue = readSensorValue(context, node.sensorId, node.facilityId);
-        this.recordStep(context, 'sensor', node.id, 'value', input.simTime, undefined, sensorValue);
+      case 'sensor':
+        readValueOfSensor(context, target);
         return;
-      }
       case 'trigger':
-        this.recordStep(context, 'trigger', node.id, 'out', input.simTime);
+        recordStep(context, 'trigger', node.id, 'out');
         return;
     }
   }
@@ -337,6 +326,43 @@ export class ProtocolRuntime {
   }
 }
 
+/**
+ * §53.5: bir node ziyaretini ize yazar.
+ *
+ * Bir node aynı execution içinde birden çok kez okunabilir (fan-out); §13.2 snapshot
+ * semantiği gereği değeri değişmediğinden iz node başına TEK adım tutar. Zaman damgası
+ * segmentin tick'idir: bir execution segmenti tek fixed step içinde baştan sona yürür,
+ * bu yüzden `context.startTime` adımın da zamanıdır.
+ */
+function recordStep(
+  context: ExecutionContext,
+  nodeKind: ProtocolNodeKind,
+  nodeId: string,
+  port: string,
+  evaluationResult?: boolean,
+  sensorValue?: ProtocolLiteral,
+): void {
+  if (context.steps.some((step) => step.nodeId === nodeId)) return;
+  context.steps.push(Object.freeze({
+    timestamp: context.startTime,
+    nodeId,
+    nodeKind,
+    port,
+    ...(sensorValue === undefined ? {} : { sensorValue }),
+    ...(evaluationResult === undefined ? {} : { evaluationResult }),
+  }));
+}
+
+/** Sensor node ziyareti: değeri snapshot'tan okur ve izi yazar. */
+function readValueOfSensor(context: ExecutionContext, executable: ExecutableProtocolNode): ProtocolLiteral | undefined {
+  const node = executable.node;
+  if (node.kind !== 'sensor') return undefined;
+  const value = readSensorValue(context, node.sensorId, node.facilityId);
+  // Okunamayan sensör de bir ziyarettir: adım yazılır, yalnız `sensorValue` taşımaz.
+  recordStep(context, 'sensor', node.id, 'value', undefined, value);
+  return value;
+}
+
 function readSensorValue(
   context: ExecutionContext,
   sensorId: string,
@@ -356,7 +382,7 @@ function readValue(context: ExecutionContext, nodeId: string, port: string): Pro
   if (source === undefined) return undefined;
   const sourceNode = context.index.nodes.get(source.nodeId);
   if (sourceNode === undefined) return undefined;
-  if (sourceNode.node.kind === 'sensor') return readSensorValue(context, sourceNode.node.sensorId, sourceNode.node.facilityId);
+  if (sourceNode.node.kind === 'sensor') return readValueOfSensor(context, sourceNode);
   if (sourceNode.node.kind === 'compare' || sourceNode.node.kind === 'and') {
     return source.port === 'result' ? evaluateBoolean(context, sourceNode) : undefined;
   }
@@ -380,5 +406,8 @@ function evaluateBoolean(context: ExecutionContext, executable: ExecutableProtoc
   }
 
   context.booleans.set(executable.id, result);
+  // İz sonucu değerlendirme SIRASINDA yazar: operandlar (sensor/compare) zaten
+  // kaydedilmiş olur, böylece steps[] nedensel sırayı korur.
+  recordStep(context, node.kind, node.id, 'result', result);
   return result;
 }
