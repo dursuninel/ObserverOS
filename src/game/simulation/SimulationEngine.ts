@@ -1,11 +1,19 @@
 import type { FacilityCommandRequest, FacilityCommandResult, FacilityDefinition, FacilityInstanceState, SafetyInterlock } from '../domain/facilities/Facility';
 import type { MaintenanceTaskState } from '../domain/maintenance/Maintenance';
-import type { ProtocolActionRequest } from '../domain/protocol/Protocol';
+import type { ProtocolActionRequest, ProtocolCommandOutcome } from '../domain/protocol/Protocol';
 import type { ColonistState } from '../domain/workforce/Workforce';
 import { PHASE_THREE_BASELINE_CONFIG, type SimulationConfig } from './SimulationConfig';
 import { SimulationClock, type SimulationClockState, type SimulationSpeed } from './SimulationClock';
 import type { SimulationEvent } from './SimulationEvent';
 import type { SimulationSnapshot } from './SimulationSnapshot';
+import {
+  arbitrateProtocolCommands,
+  facilityReasonToOutcomeReason,
+  identityActuatorResolver,
+  protocolCommandOutcome,
+  type ProtocolActuatorResolver,
+  type ProtocolCommandConflict,
+} from './protocol/protocolArbitration';
 import type { ExecutableProtocol } from './protocol/protocolCompiler';
 import { ProtocolRuntime, type ProtocolRuntimeState, type ProtocolSensorReader } from './protocol/protocolRuntime';
 import { type ConditionTransition, applyFacilityWear } from './systems/conditionSystem';
@@ -33,6 +41,12 @@ import {
 export interface SimulationProtocolOptions {
   readonly protocols: readonly ExecutableProtocol[];
   readonly readSensor: ProtocolSensorReader;
+  /**
+   * Action capability kimliğini tesis actuator'üne çözer. Verilmezse kimlik
+   * eşlemesi kullanılır: capability id'si zaten bir actuator ise ona bağlanır,
+   * değilse istek `CAPABILITY_NOT_AVAILABLE` ile başarısız olur.
+   */
+  readonly resolveActuator?: ProtocolActuatorResolver;
 }
 
 export interface SimulationEngineOptions {
@@ -56,6 +70,8 @@ interface SerializedSimulationState {
 }
 
 type SnapshotListener = () => void;
+
+const EMPTY_PROTOCOL_OUTCOMES: readonly ProtocolCommandOutcome[] = Object.freeze([]);
 
 function validateConfig(config: SimulationConfig): void {
   if (!Number.isInteger(config.daylightDurationMinutes) || config.daylightDurationMinutes < 0 || config.daylightDurationMinutes > config.clock.localDayMinutes) {
@@ -117,6 +133,7 @@ export class SimulationEngine {
   private readonly safetyInterlock: SafetyInterlock;
   private eventSequence = 0;
   private protocolActionRequests: readonly ProtocolActionRequest[] = Object.freeze([]);
+  private protocolCommandOutcomes: readonly ProtocolCommandOutcome[] = EMPTY_PROTOCOL_OUTCOMES;
   private revision = 0;
   private snapshot: SimulationSnapshot;
 
@@ -159,12 +176,17 @@ export class SimulationEngine {
     return Object.freeze([...this.events]);
   }
 
-  /**
-   * En son fixed step'te protocol runtime'ın ürettiği action request'ler (§53.6).
-   * Bu talepler burada UYGULANMAZ; command arbitration ayrı bir katmandır.
-   */
+  /** En son fixed step'te protocol runtime'ın ürettiği action request'ler (§53.6). */
   getProtocolActionRequests(): readonly ProtocolActionRequest[] {
     return this.protocolActionRequests;
+  }
+
+  /**
+   * En son fixed step'te arbitration'dan çıkan command sonuçları (§13.11).
+   * Her action request'in tam olarak bir karşılığı vardır.
+   */
+  getProtocolCommandOutcomes(): readonly ProtocolCommandOutcome[] {
+    return this.protocolCommandOutcomes;
   }
 
   getSnapshot(): SimulationSnapshot {
@@ -222,29 +244,7 @@ export class SimulationEngine {
       targetEntityId: request.facilityId,
     });
     if (facility !== undefined && result.status === 'applied') {
-      if (request.actuator === 'set-maintenance-priority') {
-        for (const task of this.maintenanceTasks) if (task.facilityId === facility.id && task.status !== 'completed') task.priority = facility.maintenancePriority;
-      }
-      if (previousBand !== undefined && previousBand !== facility.conditionBand) this.emitConditionTransition({ currentBand: facility.conditionBand, facilityId: facility.id, previousBand });
-      if (previousState !== 'failed' && facility.state === 'failed') this.emitFacilityFailed(facility.id);
-      this.emitMaintenanceTransitions(refreshMaintenanceRequests(
-        this.config.facilities,
-        this.facilities,
-        this.maintenanceTasks,
-        this.clock.getElapsedMinutes(),
-        this.config.maintenanceThreshold ?? 60,
-      ));
-      this.reallocateWorkforce(false, true);
-      this.emitMaintenanceTransitions(updateMaintenanceTasks(
-        0,
-        this.clock.getElapsedMinutes(),
-        this.definitions,
-        this.facilities,
-        this.colonists,
-        this.resources,
-        this.maintenanceTasks,
-      ));
-      updateFacilityWorkforce(this.facilities, this.colonists);
+      this.settleAppliedCommand(request.actuator, facility, previousBand, previousState);
     }
     this.publish();
     return Object.freeze({ ...result });
@@ -417,6 +417,91 @@ export class SimulationEngine {
     this.snapshot = this.createSnapshot();
   }
 
+  /**
+   * §13.10 command arbitration + §13.4 action persistence.
+   *
+   * Kararlar tek bir arbitration-öncesi tesis görünümü üzerinden verilir, sonra
+   * kazananlar `applyFacilityCommand` ile uygulanır — sonuç KALICIDIR, protokol
+   * geri alma mekanizması yoktur. Her request tam olarak bir outcome üretir (§13.11).
+   */
+  private applyProtocolActionRequests(requests: readonly ProtocolActionRequest[]): readonly ProtocolCommandOutcome[] {
+    if (requests.length === 0) return EMPTY_PROTOCOL_OUTCOMES;
+    const plan = arbitrateProtocolCommands({
+      definitions: this.definitions,
+      facilities: new Map([...this.facilities].map(([id, facility]) => [id, toReadonlyFacilityState(facility)] as const)),
+      interlock: this.safetyInterlock,
+      requests,
+      resolveActuator: this.protocolOptions?.resolveActuator ?? identityActuatorResolver,
+    });
+
+    const outcomes: ProtocolCommandOutcome[] = [...plan.rejections];
+    for (const conflict of plan.conflicts) this.emitCommandConflict(conflict);
+
+    for (const planned of plan.commands) {
+      const facility = this.facilities.get(planned.command.facilityId);
+      const definition = this.definitions.get(planned.command.facilityId);
+      if (facility === undefined || definition === undefined) continue;
+      const previousBand = facility.conditionBand;
+      const previousState = facility.state;
+      const result = applyFacilityCommand(planned.command, facility, definition, this.safetyInterlock);
+      if (result.status === 'applied') this.settleAppliedCommand(planned.command.actuator, facility, previousBand, previousState);
+      for (const request of planned.requests) {
+        outcomes.push(protocolCommandOutcome(
+          request,
+          { actuator: planned.command.actuator, ...(planned.setpointKey === undefined ? {} : { setpointKey: planned.setpointKey }) },
+          result.status,
+          facilityReasonToOutcomeReason(result.reasonCode),
+          result.appliedValue,
+        ));
+      }
+    }
+
+    outcomes.sort((left, right) => left.protocolExecutionId.localeCompare(right.protocolExecutionId)
+      || left.actuator.localeCompare(right.actuator)
+      || (left.setpointKey ?? '').localeCompare(right.setpointKey ?? ''));
+    for (const outcome of outcomes) this.emitCommandOutcome(outcome);
+    return Object.freeze(outcomes);
+  }
+
+  private emitCommandConflict(conflict: ProtocolCommandConflict): void {
+    this.emitEvent({
+      category: 'protocol',
+      eventType: 'protocol.command-conflict',
+      facilityId: conflict.facilityId,
+      payload: {
+        actuator: conflict.actuator,
+        priority: conflict.priority,
+        protocolExecutionIds: conflict.protocolExecutionIds,
+        protocolIds: conflict.protocolIds,
+        requestedValues: conflict.requestedValues,
+        ...(conflict.setpointKey === undefined ? {} : { setpointKey: conflict.setpointKey }),
+      },
+      reasonCode: 'COMMAND_CONFLICT_EQUAL_PRIORITY',
+      severity: 'warning',
+      targetEntityId: conflict.facilityId,
+    });
+  }
+
+  private emitCommandOutcome(outcome: ProtocolCommandOutcome): void {
+    this.emitEvent({
+      category: 'protocol',
+      eventType: 'protocol.command-result',
+      ...(outcome.facilityId === undefined ? {} : { facilityId: outcome.facilityId, targetEntityId: outcome.facilityId }),
+      payload: {
+        actuator: outcome.actuator,
+        ...(outcome.appliedValue === undefined ? {} : { appliedValue: outcome.appliedValue }),
+        ...(outcome.facilityReasonCode === undefined ? {} : { facilityReasonCode: outcome.facilityReasonCode }),
+        protocolId: outcome.protocolId,
+        ...(outcome.requestedValue === undefined ? {} : { requestedValue: outcome.requestedValue }),
+        ...(outcome.setpointKey === undefined ? {} : { setpointKey: outcome.setpointKey }),
+        status: outcome.status,
+      },
+      ...(outcome.reasonCode === undefined ? {} : { reasonCode: outcome.reasonCode }),
+      severity: outcome.status === 'applied' || outcome.status === 'delayed' ? 'info' : 'warning',
+      sourceEntityId: outcome.protocolExecutionId,
+    });
+  }
+
   private runFixedSteps(stepCount: number): void {
     if (stepCount === 0) return;
     for (let index = 0; index < stepCount; index += 1) {
@@ -473,9 +558,47 @@ export class SimulationEngine {
           simTime: elapsedMinutes,
           stepMinutes,
         });
+        // §53.6: arbitration BÜTÜN request'ler toplandıktan sonra, tek seferde.
+        this.protocolCommandOutcomes = this.applyProtocolActionRequests(this.protocolActionRequests);
       }
       this.revision += 1;
     }
     this.publish();
+  }
+
+  /**
+   * Uygulanmış bir komuttan sonraki zorunlu düzeltmeler. Oyuncu komutu ile
+   * protokol komutu AYNI yoldan geçer; aksi hâlde protokolün yaptığı değişiklik
+   * bakım/iş gücü sonuçlarını doğurmazdı.
+   */
+  private settleAppliedCommand(
+    actuator: FacilityCommandRequest['actuator'],
+    facility: MutableFacilityState,
+    previousBand: FacilityInstanceState['conditionBand'] | undefined,
+    previousState: FacilityInstanceState['state'] | undefined,
+  ): void {
+    if (actuator === 'set-maintenance-priority') {
+      for (const task of this.maintenanceTasks) if (task.facilityId === facility.id && task.status !== 'completed') task.priority = facility.maintenancePriority;
+    }
+    if (previousBand !== undefined && previousBand !== facility.conditionBand) this.emitConditionTransition({ currentBand: facility.conditionBand, facilityId: facility.id, previousBand });
+    if (previousState !== 'failed' && facility.state === 'failed') this.emitFacilityFailed(facility.id);
+    this.emitMaintenanceTransitions(refreshMaintenanceRequests(
+      this.config.facilities,
+      this.facilities,
+      this.maintenanceTasks,
+      this.clock.getElapsedMinutes(),
+      this.config.maintenanceThreshold ?? 60,
+    ));
+    this.reallocateWorkforce(false, true);
+    this.emitMaintenanceTransitions(updateMaintenanceTasks(
+      0,
+      this.clock.getElapsedMinutes(),
+      this.definitions,
+      this.facilities,
+      this.colonists,
+      this.resources,
+      this.maintenanceTasks,
+    ));
+    updateFacilityWorkforce(this.facilities, this.colonists);
   }
 }

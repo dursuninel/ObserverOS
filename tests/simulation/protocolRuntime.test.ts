@@ -369,7 +369,7 @@ describe('protocol runtime - SimulationEngine integration', () => {
     return engine;
   }
 
-  it('produces the request from authoritative state without changing the facility', () => {
+  it('produces the request from authoritative state and applies it (spec §13.4)', () => {
     const engine = engineWith([conditionProtocol()]);
     const fired: number[] = [];
     for (let step = 0; step < 40; step += 1) {
@@ -379,7 +379,8 @@ describe('protocol runtime - SimulationEngine integration', () => {
 
     // 0.25/sa. aşınmayla kondisyon 25. dakikada 99.9'un altına iner.
     expect(fired).toEqual([25]);
-    expect(engine.getSnapshot().facilities.find((facility) => facility.id === 'mine-01')?.mode).toBe('normal');
+    // §13.4: sonuç kalıcıdır — tetiklemeden 15 tick sonra da eski değere DÖNMEZ.
+    expect(engine.getSnapshot().facilities.find((facility) => facility.id === 'mine-01')?.mode).toBe('eco');
   });
 
   it('does not advance a pending delay while the simulation is paused', () => {

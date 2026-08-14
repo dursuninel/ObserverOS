@@ -28,6 +28,20 @@ export const tr = {
     seedSweep: { averageCandidates: 'ORTALAMA ADAY', averageMs: 'ORTALAMA ÜRETİM SÜRESİ', averageSignatures: 'ORTALAMA YAPISAL İMZA', minimumSignatures: 'EN AZ YAPISAL İMZA', failed: 'BAŞARISIZ', highest: 'EN YÜKSEK PUAN', lowest: 'EN DÜŞÜK PUAN', tested: 'TEST EDİLEN TOHUM', title: 'TOHUM TARAMASI', valid: 'GEÇERLİ' },
   },
   protocol: {
+    commandReason: {
+      CAPABILITY_NOT_AVAILABLE: 'Eylemin karşılığı olan ayar hedef tesiste bulunmuyor.',
+      COMMAND_CONFLICT_EQUAL_PRIORITY: 'Aynı öncelikteki iki protokol aynı ayara farklı değer istedi; hiçbiri uygulanmadı.',
+      COMMAND_SUPERSEDED_BY_PRIORITY: 'Aynı ayara daha yüksek öncelikli bir protokol komut verdi; bu komut uygulanmadı.',
+      COMMAND_VALUE_INVALID: 'Komutun taşıdığı değer geçersiz.',
+      COMMAND_VALUE_UNSUPPORTED: 'Tesis bu değeri desteklemiyor.',
+      SAFETY_CONDITION_LIMIT: 'Tesisin kondisyonu boost için gereken alt sınırın altında; güvenlik kilidi komutu durdurdu.',
+      SAFETY_INTERLOCK_ACTIVE: 'Tesis güvenlik kilidinde; kilit açılmadan bu komut uygulanamaz.',
+      SAFETY_RAMP_REQUIRED: 'Bu tesiste mod değişimi kademeli yapılmalı; doğrudan mod komutu uygulanmadı.',
+      SAFETY_WORKFORCE_MINIMUM: 'Tesiste boost için gereken sayıda kolonici yok; güvenlik kilidi komutu durdurdu.',
+      TARGET_FAILED: 'Hedef tesis arızalı; bakım yapılmadan komut uygulanamaz.',
+      TARGET_MAINTENANCE: 'Hedef tesis bakımda; bakım bitene kadar komut uygulanamaz.',
+      TARGET_NOT_FOUND: 'Komutun hedeflediği tesis bulunamadı.',
+    },
     error: {
       'trigger-missing': 'Protokolde başlangıç tetikleyicisi yok; otomasyon kendiliğinden başlayamaz.',
       'multiple-root-triggers': 'Bir protokolde yalnız bir başlangıç tetikleyicisi olabilir; fazlasını ayrı bir protokole taşıyın.',

@@ -105,6 +105,54 @@ export interface ProtocolActionRequest {
   readonly value?: ProtocolLiteral;
 }
 
+/**
+ * §53.8 stable reason code'ları. Metin değil kod taşınır; doğal dil Debugger
+ * metni localization üzerinden üretilir (§13.11).
+ *
+ * İlk beşi spec §53.8'de birebir geçen kodlardır. §53.8 listesi "önerilen"
+ * dediği için kapalı değildir; kalanlar mevcut facility katmanının (§9
+ * `applyFacilityCommand` / `defaultSafetyInterlock`) ürettiği sonuçların
+ * protokol karşılığıdır — yeni bir engelleme davranışı tanımlamazlar.
+ */
+export const PROTOCOL_COMMAND_REASON_CODES = [
+  'COMMAND_CONFLICT_EQUAL_PRIORITY',
+  'SAFETY_CONDITION_LIMIT',
+  'SAFETY_WORKFORCE_MINIMUM',
+  'TARGET_FAILED',
+  'TARGET_MAINTENANCE',
+  'CAPABILITY_NOT_AVAILABLE',
+  'COMMAND_SUPERSEDED_BY_PRIORITY',
+  'COMMAND_VALUE_INVALID',
+  'COMMAND_VALUE_UNSUPPORTED',
+  'SAFETY_INTERLOCK_ACTIVE',
+  'SAFETY_RAMP_REQUIRED',
+  'TARGET_NOT_FOUND',
+] as const;
+export type ProtocolCommandReasonCode = (typeof PROTOCOL_COMMAND_REASON_CODES)[number];
+
+/** §53.7 command outcome sınıfları. */
+export type ProtocolCommandStatus = 'applied' | 'blocked' | 'delayed' | 'failed';
+
+/**
+ * §13.11 `CommandResult`: her Action tam olarak bir sonuç üretir — uygulanmış,
+ * engellenmiş, başarısız veya geciktirilmiş olsun. `actuator`/`protocolId`
+ * yalnız iz sürme içindir, spec alanlarının üzerine eklenmiştir.
+ */
+export interface ProtocolCommandOutcome {
+  readonly actuator: string;
+  readonly appliedValue?: unknown;
+  readonly facilityId?: string;
+  readonly protocolExecutionId: string;
+  readonly protocolId: string;
+  /** Facility katmanının ham kodu; protokol sözlüğüne çevrilemediğinde de korunur. */
+  readonly facilityReasonCode?: string;
+  readonly reasonCode?: ProtocolCommandReasonCode;
+  readonly requestedValue?: unknown;
+  readonly setpointKey?: string;
+  readonly simTime: number;
+  readonly status: ProtocolCommandStatus;
+}
+
 export interface ProtocolDefinition {
   readonly edges: readonly ProtocolEdge[];
   readonly id: string;
