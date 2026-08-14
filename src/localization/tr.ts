@@ -27,6 +27,28 @@ export const tr = {
     orientations: { horizontal: 'Yatay omurga', vertical: 'Dikey omurga', diagonal: 'Çapraz omurga', mixed: 'Kırıklı omurga' },
     seedSweep: { averageCandidates: 'ORTALAMA ADAY', averageMs: 'ORTALAMA ÜRETİM SÜRESİ', averageSignatures: 'ORTALAMA YAPISAL İMZA', minimumSignatures: 'EN AZ YAPISAL İMZA', failed: 'BAŞARISIZ', highest: 'EN YÜKSEK PUAN', lowest: 'EN DÜŞÜK PUAN', tested: 'TEST EDİLEN TOHUM', title: 'TOHUM TARAMASI', valid: 'GEÇERLİ' },
   },
+  protocol: {
+    error: {
+      'trigger-missing': 'Protokolde başlangıç tetikleyicisi yok; otomasyon kendiliğinden başlayamaz.',
+      'multiple-root-triggers': 'Bir protokolde yalnız bir başlangıç tetikleyicisi olabilir; fazlasını ayrı bir protokole taşıyın.',
+      'action-required-field-missing': 'Eylemde eksik alan var: hedef tesis veya ayarlanacak değer belirtilmemiş.',
+      'action-value-type': 'Eylem için seçilen değer bu ayarın kabul ettiği türde değil.',
+      'compare-operand-type': 'Karşılaştırılan iki değer aynı türde değil; bu karşılaştırma yapılamaz.',
+      'and-input-missing': 'VE düğümünün iki koşul girişi de bağlı olmalı.',
+      'graph-cycle': 'Bağlantılar kendi üzerine dönüyor; döngü içeren protokol uygulanamaz.',
+      'delay-duration-out-of-range': 'Geciktirme süresi izin verilen aralığın dışında.',
+      'edge-port-incompatible': 'Bu bağlantı birbirine uymayan iki ucu birleştiriyor.',
+      'capability-unavailable': 'Seçilen ölçüm veya eylem bu koloninin mevcut tesislerinde bulunmuyor.',
+      'deleted-facility-reference': 'Protokol artık var olmayan bir tesise bağlı.',
+    },
+    warning: {
+      'action-value-unchanged': 'Bu eylem tesisi zaten bulunduğu değere ayarlıyor olabilir.',
+      'no-affected-facility': 'Protokol şu anda hiçbir tesisi etkilemiyor; uygun bir tesis kurulduğunda çalışabilir.',
+      'potential-conflict': 'Aynı ayarı değiştiren başka bir aktif protokol var; ikisi çakışabilir.',
+      'threshold-oscillation-risk': 'Eşik değerleri birbirine çok yakın; sık mod değişimi oluşabilir.',
+      'long-delay': 'Geciktirme süresi görev döngüsünden uzun olabilir.',
+    },
+  },
   simulationDiagnostic: {
     actions: {
       advance60: '+60 Sim. Dakika İlerle',
