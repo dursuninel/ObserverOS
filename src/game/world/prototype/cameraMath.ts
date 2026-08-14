@@ -1,7 +1,8 @@
 import type { CameraPreset } from './types';
 import type { CameraBounds, GeneratedPlanetLayout } from '../layout/layoutTypes';
+import { COLONY_GROUND_CAMERA_BOUNDS, COLONY_GROUND_HALF_EXTENT } from '../layout/colonyGround';
 import { getGeneratedFacility } from '../layout/layoutQueries';
-import { getFacilityPlacement, getPrototypeWorldBounds, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
+import { getFacilityPlacement, PROTOTYPE_LAYOUT, type Point2 } from './prototypeLayout';
 
 export interface CameraGroundBasis {
   readonly right: Point2;
@@ -57,7 +58,7 @@ export function mapScreenDragWithBasis(deltaX: number, deltaY: number, scale: nu
 }
 
 const projectedHalfExtent = (axis: Point2, cameraBounds?: CameraBounds): number => {
-  const world = cameraBounds ?? getPrototypeWorldBounds();
+  const world = cameraBounds ?? COLONY_GROUND_CAMERA_BOUNDS;
   const centerX = (world.minX + world.maxX) / 2;
   const centerZ = (world.minZ + world.maxZ) / 2;
   const corners: readonly Point2[] = [
@@ -114,20 +115,45 @@ export function clampCameraTargetInScreenSpace(
   return [origin[0] + worldOffset[0], origin[1] + worldOffset[1]];
 }
 
+/**
+ * Zemin 44x44 → 36x36 küçüldüğü için yeniden kalibre edildi. `overview` artık ölçülen gerçek
+ * genel-görünüm yakınlaştırmasına yakın (bkz. `getColonyGroundOverviewZoom`); `getCameraPanLimits`
+ * kaydırma payını bu değere oranlıyor, uydurma bir 40/46 değil.
+ * `min`, karenin köşeleriyle birlikte tamamının sığdığı yakınlaştırmanın biraz altında: kullanıcı
+ * kareden biraz uzaklaşabilir ama boşlukta kaybolamaz.
+ */
 export function getCameraZoomRange(viewportWidth: number, panelOpen: boolean): CameraZoomRange {
-  if (viewportWidth <= 720) return { min: 14, max: 68, overview: 24, focus: 54 };
-  return { min: 16, max: 72, overview: panelOpen ? 40 : 46, focus: 56 };
+  if (viewportWidth <= 720) return { min: 11, max: 68, overview: 20, focus: 54 };
+  return { min: 18, max: 72, overview: panelOpen ? 30 : 34, focus: 56 };
 }
 
-export function getLayoutOverviewZoom(viewportWidth: number, viewportHeight: number, panelOpen: boolean, bounds?: CameraBounds): number {
+/** İzometrik projeksiyonda karenin kenar ORTA noktaları (köşeler değil). */
+const groundEdgeMidpoints: readonly Point2[] = [
+  [COLONY_GROUND_HALF_EXTENT, 0], [-COLONY_GROUND_HALF_EXTENT, 0],
+  [0, COLONY_GROUND_HALF_EXTENT], [0, -COLONY_GROUND_HALF_EXTENT],
+];
+
+/**
+ * Genel görünüm yakınlaştırması SABİT zemin karesinden türetilir, adayın içeriğinden değil.
+ *
+ * Neden: `layout.cameraBounds` içerikten türetiliyor (öyle kalmalı, `layoutScoring.compactness`
+ * ağırlık 3 ile ondan besleniyor). Kadrajı ona bağlamak her adayda farklı bir yakınlaştırma
+ * veriyordu — aday değiştirince görüntü zıplıyordu. Zemin her adayda ve Default'ta aynı kare
+ * olduğu için kadraj da aynı olmalı.
+ *
+ * Yatayda köşelerin taşmasına izin verilir: izometrik karenin sağ/sol köşeleri BOŞ üçgenlerdir,
+ * onları kadraja sığdırmak kareyi gereksizce küçültür. Yatay ölçüt kenar orta noktaları, dikey
+ * ölçüt karenin tam izdüşümüdür.
+ */
+export function getColonyGroundOverviewZoom(viewportWidth: number, viewportHeight: number, panelOpen: boolean): number {
   const mobile = viewportWidth <= 720;
   const safeWidth = Math.max(1, viewportWidth - (!mobile && panelOpen ? 380 : 0));
   const safeHeight = Math.max(1, viewportHeight * (mobile && panelOpen ? 0.62 : 1));
   const basis = getCameraGroundBasis();
   const groundVerticalScale = CAMERA_OFFSET[1] / Math.hypot(...CAMERA_OFFSET);
-  const projectedRight = projectedHalfExtent(basis.right, bounds) + 1.4;
-  const projectedUp = projectedHalfExtent(basis.up, bounds) * groundVerticalScale + 3.2;
-  const fitZoom = Math.min(safeWidth / (2 * projectedRight), safeHeight / (2 * projectedUp)) * 0.92;
+  const horizontalExtent = Math.max(...groundEdgeMidpoints.map(([x, z]) => Math.abs(x * basis.right[0] + z * basis.right[1])));
+  const verticalExtent = projectedHalfExtent(basis.up, COLONY_GROUND_CAMERA_BOUNDS) * groundVerticalScale;
+  const fitZoom = Math.min(safeWidth / (2 * horizontalExtent + 2.8), safeHeight / (2 * verticalExtent + 6.4)) * 0.94;
   return clampCameraZoom(fitZoom, getCameraZoomRange(viewportWidth, panelOpen));
 }
 
@@ -136,7 +162,9 @@ export function clampCameraZoom(zoom: number, range: CameraZoomRange): number {
 }
 
 export function getCameraPresetTarget(preset: CameraPreset, layout?: GeneratedPlanetLayout): readonly [number, number, number] {
-  if (preset === 'overview') return layout ? [layout.cameraBounds.center[0], 0, layout.cameraBounds.center[1]] : [PROTOTYPE_LAYOUT.camera.center[0], 0, PROTOTYPE_LAYOUT.camera.center[1]];
+  // Üretilen adaylarda genel görünüm ZEMİNİN merkezine bakar, adayın kendi `cameraBounds`
+  // merkezine değil: o merkez adaydan adaya kayıyor ve kadrajı zıplatıyordu.
+  if (preset === 'overview') return layout ? [COLONY_GROUND_CAMERA_BOUNDS.center[0], 0, COLONY_GROUND_CAMERA_BOUNDS.center[1]] : [PROTOTYPE_LAYOUT.camera.center[0], 0, PROTOTYPE_LAYOUT.camera.center[1]];
   const placement = layout ? getGeneratedFacility(layout, preset) : getFacilityPlacement(preset);
   return [placement.position[0], 0, placement.position[1]];
 }

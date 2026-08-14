@@ -1,4 +1,5 @@
 import { requirePrototypeAsset } from '../assets/prototypeAssetRegistry';
+import { COLONY_GROUND_VERTICES } from '../layout/colonyGround';
 import type { FacilityId } from './types';
 
 export type Point2 = readonly [x: number, z: number];
@@ -121,11 +122,10 @@ export const PROTOTYPE_LAYOUT = {
     ] as readonly Point2[],
     localStagingPoints: [[-0.92, 2.72], [-0.38, 3.02], [0.6, 3.05], [1.48, 2.92]] as readonly Point2[],
   },
-  plateauVertices: [
-    [-10.8, -4.8], [-8.7, -7], [-4.8, -7.8], [-1.2, -7.4], [2.4, -8.1], [6.5, -7.2],
-    [10.9, -6.3], [13.1, -3.2], [12.4, 0.8], [13.3, 4.7], [10.4, 7.2], [6.4, 7.7],
-    [2.8, 7.25], [-1.4, 8], [-5.5, 7.1], [-9.3, 6.2], [-11.7, 3.3], [-11.1, -0.7],
-  ] as readonly Point2[],
+  // Zemin, Default ve üretilen adaylarda AYNI karedir (tek kaynak: `COLONY_GROUND_VERTICES`).
+  // Faz 3'ün kendi yerleşimi (tesis/yol/kaya konumları) dondurulmuş hâliyle korunur; değişen
+  // yalnız üstünde durdukları zeminin şekli.
+  plateauVertices: COLONY_GROUND_VERTICES,
   hazeAnchors: [[-7.5, 4.7], [-3.2, -5.8], [2.2, 6.1], [6.8, -5.4], [10.2, 3.4]] as readonly Point2[],
   zones: {
     coreCrates: [[-2.7, 2.1, 0.2], [3.2, 2.1, -0.4], [-5.4, -2.1, -0.3]] as const,
@@ -146,20 +146,11 @@ export function getHabitatPresentationPoints(placement: Pick<PrototypeFacilityPl
   };
 }
 
-export function getPrototypeWorldBounds(): { readonly maxX: number; readonly maxZ: number; readonly minX: number; readonly minZ: number } {
-  const points: Point2[] = [...PROTOTYPE_LAYOUT.plateauVertices, ...PROTOTYPE_LAYOUT.roadNodes.map((node) => node.position)];
-  for (const facility of PROTOTYPE_LAYOUT.facilities) {
-    const footprint = getFacilityFootprint(facility.id);
-    points.push(
-      [footprint.center[0] - footprint.width / 2, footprint.center[1] - footprint.depth / 2],
-      [footprint.center[0] + footprint.width / 2, footprint.center[1] + footprint.depth / 2],
-    );
-  }
-  return {
-    minX: Math.min(...points.map(([x]) => x)), maxX: Math.max(...points.map(([x]) => x)),
-    minZ: Math.min(...points.map(([, z]) => z)), maxZ: Math.max(...points.map(([, z]) => z)),
-  };
-}
+/*
+ * Faz 3'ün dondurulmuş kamera çerçevesi (`PROTOTYPE_WORLD_BOUNDS`) KALDIRILDI: kamera artık
+ * her iki modda da ortak zemin karesini çerçeveliyor (bkz. `cameraMath.getColonyGroundOverviewZoom`),
+ * yani moda özel bir dünya kutusuna gerek yok. Faz 3'ün tesis/yol/kaya verisi değişmedi.
+ */
 
 export function getRoadNode(id: string): PrototypeRoadNode {
   const node = PROTOTYPE_LAYOUT.roadNodes.find((candidate) => candidate.id === id);

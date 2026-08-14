@@ -1,4 +1,5 @@
 import { getFacilityPlacement, getRoadTilePlacements, getStreetLightPlacements, PROTOTYPE_LAYOUT } from '../prototype/prototypeLayout';
+import { colonyGroundPropZones } from './colonyGround';
 import type { FacilityId } from '../prototype/types';
 import type { TravelNetworkConfig } from '../../domain/workforce/TravelNetwork';
 import type { GeneratedFacilityPlacement, GeneratedPlanetLayout, GeneratedVisualModule, LayoutEntityId, Point2 } from './layoutTypes';
@@ -60,15 +61,8 @@ export function getGeneratedExpansionPads(layout: GeneratedPlanetLayout | null):
   return layout.expansionSlots.map((slot) => ({ id: slot.id, position: slot.position, rotationY: slot.rotationY }));
 }
 
-export function getGeneratedPropPlacements(layout: GeneratedPlanetLayout | null): readonly RenderPropPlacement[] {
-  if (layout === null) {
-    return [
-      ...PROTOTYPE_LAYOUT.zones.outerRocks.map(([x, z, rotation, scale], index): RenderPropPlacement => ({ assetId: 'rock-large', elevation: 0.12, id: `outer-${index}`, position: [x, z], rotationY: rotation, scale })),
-      ...PROTOTYPE_LAYOUT.zones.transitionRocks.map(([x, z, rotation], index): RenderPropPlacement => ({ assetId: index % 2 ? 'rock-small-a' : 'rock-small-b', elevation: 0.12, id: `transition-${index}`, position: [x, z], rotationY: rotation, scale: 1 })),
-      ...PROTOTYPE_LAYOUT.zones.coreCrates.map(([x, z, rotation], index): RenderPropPlacement => ({ assetId: 'supply-crate', elevation: 0.14, id: `crate-${index}`, position: [x, z], rotationY: rotation, scale: 1 })),
-    ];
-  }
-  return layout.propZones.flatMap((zone) => [-0.33, 0.33].map((offset, index): RenderPropPlacement => ({
+const propZoneRocks = (zones: GeneratedPlanetLayout['propZones']): readonly RenderPropPlacement[] =>
+  zones.flatMap((zone) => [-0.33, 0.33].map((offset, index): RenderPropPlacement => ({
     assetId: index % 2 ? 'rock-small-a' : 'rock-small-b',
     elevation: 0.12,
     id: `${zone.id}-${index}`,
@@ -76,6 +70,19 @@ export function getGeneratedPropPlacements(layout: GeneratedPlanetLayout | null)
     rotationY: (zone.seedOffset + index) * 0.73,
     scale: 1,
   })));
+
+export function getGeneratedPropPlacements(layout: GeneratedPlanetLayout | null): readonly RenderPropPlacement[] {
+  if (layout === null) {
+    // Zemin Default'ta da aynı karedir, dolayısıyla kenar kaya kuşağı da aynıdır; Faz 3'ün kendi
+    // kaya/sandık yerleşimi dondurulmuş hâliyle korunur.
+    return [
+      ...PROTOTYPE_LAYOUT.zones.outerRocks.map(([x, z, rotation, scale], index): RenderPropPlacement => ({ assetId: 'rock-large', elevation: 0.12, id: `outer-${index}`, position: [x, z], rotationY: rotation, scale })),
+      ...PROTOTYPE_LAYOUT.zones.transitionRocks.map(([x, z, rotation], index): RenderPropPlacement => ({ assetId: index % 2 ? 'rock-small-a' : 'rock-small-b', elevation: 0.12, id: `transition-${index}`, position: [x, z], rotationY: rotation, scale: 1 })),
+      ...PROTOTYPE_LAYOUT.zones.coreCrates.map(([x, z, rotation], index): RenderPropPlacement => ({ assetId: 'supply-crate', elevation: 0.14, id: `crate-${index}`, position: [x, z], rotationY: rotation, scale: 1 })),
+      ...propZoneRocks(colonyGroundPropZones(0, 0)),
+    ];
+  }
+  return propZoneRocks(layout.propZones);
 }
 
 export function getGeneratedRoadNode(layout: GeneratedPlanetLayout, id: string) {

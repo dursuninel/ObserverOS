@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { PHASE_THREE_BASELINE_CONFIG } from '../../src/game/simulation/SimulationConfig';
 import { SimulationEngine } from '../../src/game/simulation/SimulationEngine';
 import { prototypeAssetRegistry } from '../../src/game/world/assets/prototypeAssetRegistry';
+import { COLONY_GROUND_VERTICES } from '../../src/game/world/layout/colonyGround';
 import { createDeterministicRng } from '../../src/game/world/layout/deterministicRng';
 import { calculateStructuralDifference, generateLayoutCandidates, generateZoneAnchors, runLayoutSeedSweep } from '../../src/game/world/layout/layoutGenerator';
 import { pointInRect, segmentIntersectsRect } from '../../src/game/world/layout/layoutMath';
@@ -133,7 +134,9 @@ describe('Faz 4 Test 2 structural layout generation', () => {
   it('22. terrain visual footprint variant deterministic ve çeşitli kalır', () => {
     expect(generateLayoutCandidates({ seed: 41_001 })).toEqual(generated);
     expect(new Set(candidates.map(({ structure }) => structure.terrainVariant)).size).toBeGreaterThanOrEqual(3);
-    candidates.forEach((layout) => expect(layout.plateauVertices.length).toBeGreaterThanOrEqual(7));
+    // Zemin artık arazi varyantından TÜRETİLMEZ: her adayda sabit kare (bkz. colonyGround.test.ts).
+    // terrainVariant yalnız varyasyon planını ve imzayı besler.
+    candidates.forEach((layout) => expect(layout.plateauVertices).toEqual(COLONY_GROUND_VERTICES));
   });
   it('23. aynı seed aynı structural outputu üretir', () => expect(generateLayoutCandidates({ seed: 41_001 })).toEqual(generateLayoutCandidates({ seed: 41_001 })));
   it('24. yeni seed structural selections veya anchorları değiştirebilir', () => {

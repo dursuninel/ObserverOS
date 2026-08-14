@@ -8,9 +8,9 @@ import {
   spineNodeId,
   type FacilityPlacementPlan,
   type MaterializedArchetype,
-  type PlateauPlan,
   type StreetLightPlan,
 } from './archetypeVariation';
+import { COLONY_GROUND_VERTICES, colonyGroundPropZones } from './colonyGround';
 import { createDeterministicRng, hashSeed, type DeterministicRng } from './deterministicRng';
 import { deriveCameraBounds, distance, pointInRect, rectContains, rectanglesOverlap, segmentIntersectsRect, transformLocalPoint } from './layoutMath';
 import { scoreGeneratedLayout, totalLayoutScore } from './layoutScoring';
@@ -352,45 +352,16 @@ const PLATEAU_SHAPES: Readonly<Record<TerrainVisualVariantId, readonly Point2[]>
   'split-ledge': [[-0.52, -0.3], [-0.18, -0.46], [0.08, -0.3], [0.46, -0.42], [0.54, 0.04], [0.34, 0.44], [-0.06, 0.32], [-0.34, 0.46], [-0.54, 0.12]],
 };
 
+// PLATEAU_SHAPES artık zemini ÇİZMEZ; yalnız `materializeArchetype`'a arazi varyantı başına tepe
+// sayısını verir (varyasyon planının boyutu). Zemin, seed'den bağımsız sabit karedir:
+// bkz. `COLONY_GROUND_VERTICES`.
 export const plateauVertexCountFor = (variant: TerrainVisualVariantId): number => PLATEAU_SHAPES[variant].length;
 
-// The silhouette family stays recognisable, but every seed deforms it: global rotation/scale plus
-// per-vertex radial and angular jitter, plus up to three extra vertices pushed off an edge. Sorting
-// by polar angle at the end keeps the polygon simple no matter how the jitter falls.
-function derivePlateauVertices(variant: TerrainVisualVariantId, bounds: ReturnType<typeof deriveCameraBounds>, plan: PlateauPlan): readonly Point2[] {
-  const width = bounds.maxX - bounds.minX;
-  const depth = bounds.maxZ - bounds.minZ;
-  const base = PLATEAU_SHAPES[variant];
-  const jittered: Point2[] = base.map(([x, z], index) => {
-    const radius = Math.hypot(x, z) * (plan.radialJitter[index] ?? 1);
-    const angle = Math.atan2(z, x) + plan.rotation + (plan.angularJitter[index] ?? 0);
-    return [Math.cos(angle) * radius * plan.scaleX, Math.sin(angle) * radius * plan.scaleZ];
-  });
-  const all: Point2[] = [...jittered];
-  for (const extra of plan.extraVertices) {
-    const index = extra.edgeIndex % jittered.length;
-    const first = jittered[index];
-    const second = jittered[(index + 1) % jittered.length];
-    if (!first || !second) continue;
-    const middle: Point2 = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
-    all.push([middle[0] * (1 + extra.offset), middle[1] * (1 + extra.offset)]);
-  }
-  return all
-    .map((vertex) => ({ angle: Math.atan2(vertex[1], vertex[0]), vertex }))
-    .sort((a, b) => a.angle - b.angle)
-    .map(({ vertex }) => point(bounds.center[0] + vertex[0] * width * 1.12, bounds.center[1] + vertex[1] * depth * 1.12));
-}
-
-function derivePropZones(materialized: MaterializedArchetype, bounds: ReturnType<typeof deriveCameraBounds>, candidateIndex: number): readonly PropZone[] {
-  const depth = bounds.maxZ - bounds.minZ;
-  return materialized.propZonePlans.map((plan, index) => ({
-    id: `outer-rocks-${index}`,
-    center: point(plan.side < 0 ? bounds.minX + plan.width / 2 + 0.4 : bounds.maxX - plan.width / 2 - 0.4, bounds.center[1] + plan.lateralShift * depth * 0.24),
-    width: round(plan.width),
-    depth: round(Math.max(1.2, depth * plan.depthScale)),
-    density: 'low' as const,
-    seedOffset: plan.seedOffset + candidateIndex * 2,
-  }));
+// Kaya kuşağı sabit karenin kenarlarını takip eder; `propZonePlans` yalnız seed'e bağlı jitter
+// tohumunu verir, konumu artık içerikten türetilen bounds değil kare belirler.
+function derivePropZones(materialized: MaterializedArchetype, candidateIndex: number): readonly PropZone[] {
+  const seedOffset = materialized.propZonePlans.reduce((sum, plan) => sum + plan.seedOffset, 0);
+  return colonyGroundPropZones(candidateIndex, seedOffset);
 }
 
 function roadTurningPattern(roads: readonly GeneratedRoad[]): readonly ('corner' | 'straight')[] {
@@ -462,9 +433,9 @@ function buildCandidate(seed: number, candidateIndex: number, attempt: number, s
     candidateId: `${archetype.id}-${String(candidateIndex + 1).padStart(2, '0')}`, style,
     facilities: placed, expansionSlots: [expansion], roads: graph.roads, navigationNodes: graph.nodes, navigationEdges: graph.edges,
     streetLights: deriveStreetLights(graph.nodes, graph.edges, graph.roads, materialized.streetLightPlan, rng), cameraBounds,
-    plateauVertices: derivePlateauVertices(terrainVariant, cameraBounds, materialized.plateauPlan),
+    plateauVertices: COLONY_GROUND_VERTICES,
     zones: terrain.areas.map((area) => ({ ...area })),
-    propZones: derivePropZones(materialized, cameraBounds, candidateIndex),
+    propZones: derivePropZones(materialized, candidateIndex),
     score: 0, scoreBreakdown: EMPTY_SCORE,
     structure: {
       archetype: archetype.id, habitatVariant, terrainVariant, expansionRelation: archetype.expansionRelation,

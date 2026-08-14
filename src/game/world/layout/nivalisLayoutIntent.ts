@@ -1,3 +1,4 @@
+import { COLONY_BUILDABLE_HALF_EXTENT } from './colonyGround';
 import type { FacilityId } from '../prototype/types';
 import type { LayoutScoreBreakdown, LayoutStyle, PlacementProfile, TerrainDefinition } from './layoutTypes';
 
@@ -83,10 +84,15 @@ export const NIVALIS_LAYOUT_INTENT: NivalisLayoutIntent = {
  * yayılıyordu — facility spanX p50 29.1 / spanZ p50 17.2, Default ise 16.0 / 8.1.
  * Spec §33.1 "Layout: Compact, açık ve okunabilir" gereği daraltıldı.
  *
- * DİKKAT: `terrain.bounds` ve `buildable-plateau` bilerek küçültülmedi. Tesis footprint'leri
- * bu oranla küçülmediği için, çapalar yaklaşırken `chooseFacilityAnchor` halka aramasının
- * çakışmaları çözebileceği boş alana ihtiyacı var; plato daraltılırsa üretim komple çöker
- * (ölçülen: plato 0.85 kat → 60/60 seed `structural-generation-failed`).
+ * DİKKAT: `terrain.bounds` bilerek küçültülmedi. Tesis footprint'leri bu oranla küçülmediği için,
+ * çapalar yaklaşırken `chooseFacilityAnchor` halka aramasının çakışmaları çözebileceği boş alana
+ * ihtiyacı var (ölçülen: bounds 0.90 kat → 80 seed'in 50'si, 0.80 kat → 80'i çöktü).
+ *
+ * `buildable-plateau` ise DARALTILDI (43x29 dikdörtgen → 32.6x32.6 kare, bkz.
+ * `COLONY_BUILDABLE_HALF_EXTENT`) ve 0 seed kaybettirdi. Eski "plato 0.85 kat → 60/60 çöktü"
+ * ölçümüyle çelişmiyor: o deneme platoyu DİKDÖRTGEN olarak küçültüp derinlik yarı-kenarını
+ * 12.3'e indirmişti, oysa içerik z ekseninde 14.5'e uzanıyor. Kare plato dikeyde 14.5 → 16.3
+ * ile GENİŞLETİYOR, yalnız yatayda daraltıyor.
  * Değiştirdikten sonra `runLayoutSeedSweep` koş, failed === 0 olduğunu doğrula.
  */
 export const NIVALIS_ANCHOR_SPREAD = 0.33;
@@ -100,12 +106,23 @@ export const NIVALIS_ANCHOR_SPREAD = 0.33;
 const ZONE_PULL = NIVALIS_ANCHOR_SPREAD / 0.47;
 const pull = (value: number) => Number((value * ZONE_PULL).toFixed(2));
 
+/**
+ * Zemin karesi 44x44'ten 36x36'ya indi. ÜNİFORM ölçekleme (bounds + zone merkezleri + zone
+ * ölçüleri hep birlikte) ÖLÇÜLDÜ ve ÇALIŞMIYOR — bina bileşkeleri ölçekle küçülmediği için
+ * `chooseFacilityAnchor` yer bulamıyor: 80 seed'de 0.90 kat → 50 seed çöktü, 0.80 kat → 80/80.
+ * İşe yarayan tek kaldıraç, üretimin sığmak zorunda olduğu PLATOYU zemin karesine bağlamak;
+ * çapa yayılımı (`bounds` x `NIVALIS_ANCHOR_SPREAD`) ve zone genişlikleri arama penceresi olarak
+ * cömert kalır, plato duvar görevi görür. Ölçüm: `docs/agent-results` TASK raporu, madde 1.
+ *
+ * Bu yüzden `bounds` bir ZEMİN DEĞİL, çapa yayılımının referans çerçevesidir; 44x30 kalır.
+ */
 export const NIVALIS_TERRAIN: TerrainDefinition = {
   id: 'nivalis-frozen-plateau',
   bounds: { center: [0, 0], width: 44, depth: 30 },
   areas: [
-    // Plato ve sınırlar geniş kalır: halka aramasının manevra alanı.
-    { id: 'buildable-plateau', center: [0, 0], width: 43, depth: 29, tags: ['buildable'] },
+    // Plato = zemin karesinin içindeki inşa edilebilir kare. Halka araması yine geniş bir alanda
+    // dener, ama kabul edilen her footprint bu karenin içinde kalmak zorundadır.
+    { id: 'buildable-plateau', center: [0, 0], width: COLONY_BUILDABLE_HALF_EXTENT * 2, depth: COLONY_BUILDABLE_HALF_EXTENT * 2, tags: ['buildable'] },
     { id: 'energy-west', center: [pull(-9), pull(1)], width: 18, depth: 24, tags: ['buildable'], operationalZone: 'Energy' },
     { id: 'colony-core', center: [pull(1), pull(-1)], width: 19, depth: 23, tags: ['buildable'], operationalZone: 'Residential' },
     { id: 'life-support-core', center: [pull(5), pull(1)], width: 17, depth: 22, tags: ['buildable'], operationalZone: 'LifeSupport' },
@@ -116,7 +133,10 @@ export const NIVALIS_TERRAIN: TerrainDefinition = {
     { id: 'expansion-south', center: [pull(-8), pull(-11)], width: 11, depth: 7, tags: ['buildable', 'preferredExpansionArea'] },
     { id: 'expansion-north', center: [pull(8), pull(12)], width: 9, depth: 5, tags: ['buildable', 'preferredExpansionArea'] },
     { id: 'expansion-west', center: [pull(-18), pull(-8)], width: 7, depth: 8, tags: ['buildable', 'preferredExpansionArea'] },
-    { id: 'northwest-ridge', center: [-20, 12.5], width: 2.5, depth: 2.5, tags: ['blocked'] },
-    { id: 'southeast-crevasse', center: [20, -12.5], width: 2.4, depth: 2.8, tags: ['blocked', 'hazardZone'] },
+    // Engeller inşa platosunun DIŞINDA ama zemin karesinin İÇİNDE duran halkada. Eski ±20/±12.5
+    // konumları artık zeminin (±18) tamamen dışında kalırdı — havada duran ölü konfigürasyon.
+    // Halkaya taşımak üretimi bozmuyor (ölçüldü: seed 1..100 → 100/100, 41001..41060 → 60/60).
+    { id: 'northwest-ridge', center: [-16.6, 9.1], width: 2.5, depth: 2.5, tags: ['blocked'] },
+    { id: 'southeast-crevasse', center: [16.6, -9.1], width: 2.4, depth: 2.8, tags: ['blocked', 'hazardZone'] },
   ],
 };
