@@ -1,18 +1,13 @@
-import { useTranslation } from 'react-i18next';
+import { ProtocolManager } from './ProtocolManager';
 
-import { ProtocolFlowBoundary } from './ProtocolFlowBoundary';
-
+/**
+ * `/protocols` rotası. Spec §14.1: bu ekran doğrudan graph DEĞİL, manager'dır.
+ * Graph Editor ayrı bir yüzeydir ve buradan açılır (Faz 6/2).
+ */
 export function ProtocolsWorkspace() {
-  const { t } = useTranslation();
-
   return (
-    <section aria-labelledby="protocols-heading" className="workspace">
-      <div className="workspace-copy">
-        <h1 id="protocols-heading">{t('workspace.protocols.title')}</h1>
-        <p>{t('workspace.protocols.foundationStatus')}</p>
-      </div>
-      <ProtocolFlowBoundary />
-    </section>
+    <div className="workspace workspace-protocols">
+      <ProtocolManager />
+    </div>
   );
 }
-
