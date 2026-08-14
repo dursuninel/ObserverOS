@@ -250,3 +250,32 @@ export interface ProtocolValidationReport {
   readonly findings: readonly ProtocolValidationFinding[];
   readonly valid: boolean;
 }
+
+/**
+ * §53.5 Execution trace — protocol execution'ın veri kaydı.
+ *
+ * Runtime, her execution'ı trigger crossing'ten outcome'a kadar izler.
+ * Trace yalnız veri katmanı; Debugger (Faz 7) bunu presentasyon katmanına çevirir.
+ */
+export interface ProtocolExecutionStep {
+  readonly timestamp: number; // simTime bu adımda
+  readonly nodeId: string;
+  readonly nodeKind: ProtocolNodeKind;
+  /** Flow portu: 'in', 'out', 'whenTrue', 'whenFalse'. */
+  readonly port: string;
+  /** Sensor okuması (sensor node'da). */
+  readonly sensorValue?: ProtocolLiteral;
+  /** Comparison/AND sonucu (compare/and node'da). */
+  readonly evaluationResult?: boolean;
+}
+
+export interface ProtocolExecutionTrace {
+  readonly protocolExecutionId: string;
+  readonly protocolId: string;
+  readonly priority: Priority;
+  /** Trigger crossing'in kaydedildiği simTime. */
+  readonly triggeredAt: number;
+  /** Execution son node'dan çıktı; trace kapandı. Faz 5'te completion yok (Delay bekleme devam edebilir). */
+  readonly completedAt?: number;
+  readonly steps: readonly ProtocolExecutionStep[];
+}

@@ -1,6 +1,6 @@
 import type { FacilityCommandRequest, FacilityCommandResult, FacilityDefinition, FacilityInstanceState, SafetyInterlock } from '../domain/facilities/Facility';
 import type { MaintenanceTaskState } from '../domain/maintenance/Maintenance';
-import type { ProtocolActionRequest, ProtocolCommandOutcome } from '../domain/protocol/Protocol';
+import type { ProtocolActionRequest, ProtocolCommandOutcome, ProtocolExecutionTrace } from '../domain/protocol/Protocol';
 import type { ColonistState } from '../domain/workforce/Workforce';
 import { PHASE_THREE_BASELINE_CONFIG, type SimulationConfig } from './SimulationConfig';
 import { SimulationClock, type SimulationClockState, type SimulationSpeed } from './SimulationClock';
@@ -64,6 +64,7 @@ interface SerializedSimulationState {
   readonly facilities: readonly FacilityInstanceState[];
   readonly maintenanceTasks: readonly MaintenanceTaskState[];
   readonly processedCommandIds: readonly string[];
+  readonly protocolExecutionTraces?: readonly ProtocolExecutionTrace[];
   readonly protocolRuntime?: ProtocolRuntimeState;
   readonly resources: SimulationSnapshot['resources'];
   readonly revision: number;
@@ -134,6 +135,7 @@ export class SimulationEngine {
   private eventSequence = 0;
   private protocolActionRequests: readonly ProtocolActionRequest[] = Object.freeze([]);
   private protocolCommandOutcomes: readonly ProtocolCommandOutcome[] = EMPTY_PROTOCOL_OUTCOMES;
+  private protocolExecutionTraces: readonly ProtocolExecutionTrace[] = Object.freeze([]);
   private revision = 0;
   private snapshot: SimulationSnapshot;
 
@@ -187,6 +189,11 @@ export class SimulationEngine {
    */
   getProtocolCommandOutcomes(): readonly ProtocolCommandOutcome[] {
     return this.protocolCommandOutcomes;
+  }
+
+  /** Headless execution trace'leri (§53.5). Faz 5 data katmanı. */
+  getProtocolExecutionTraces(): readonly ProtocolExecutionTrace[] {
+    return this.protocolExecutionTraces;
   }
 
   getSnapshot(): SimulationSnapshot {
@@ -352,6 +359,7 @@ export class SimulationEngine {
       facilities: this.snapshot.facilities,
       maintenanceTasks: this.snapshot.maintenanceTasks,
       processedCommandIds: [...this.processedCommandIds].sort(),
+      protocolExecutionTraces: [...this.protocolExecutionTraces],
       protocolRuntime: this.protocolRuntime.exportState(),
       resources: this.snapshot.resources,
       revision: this.revision,
@@ -400,6 +408,7 @@ export class SimulationEngine {
     for (const id of state.activeShortageIds) this.activeShortageIds.add(id);
     // Delay'de bekleyen execution'ların KALAN süresi save ile taşınır (§13.5).
     if (state.protocolRuntime !== undefined) this.protocolRuntime.restoreState(state.protocolRuntime);
+    if (state.protocolExecutionTraces !== undefined) this.protocolExecutionTraces = [...state.protocolExecutionTraces];
     for (const facility of state.facilities) {
       const target = this.facilities.get(facility.id);
       if (target === undefined) throw new Error(`Serialized facility is missing from config: ${facility.id}`);
@@ -558,6 +567,7 @@ export class SimulationEngine {
           simTime: elapsedMinutes,
           stepMinutes,
         });
+        this.protocolExecutionTraces = this.protocolRuntime.getExecutionTraces();
         // §53.6: arbitration BÜTÜN request'ler toplandıktan sonra, tek seferde.
         this.protocolCommandOutcomes = this.applyProtocolActionRequests(this.protocolActionRequests);
       }

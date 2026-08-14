@@ -1,8 +1,12 @@
 import type {
   CompareOperator,
   ProtocolActionRequest,
+  ProtocolExecutionStep,
+  ProtocolExecutionTrace,
   ProtocolLiteral,
+  ProtocolNodeKind,
 } from '../../domain/protocol/Protocol';
+import type { Priority } from '../../domain/facilities/Facility';
 import type { ExecutableProtocol, ExecutableProtocolNode } from './protocolCompiler';
 
 /**
@@ -44,6 +48,7 @@ export interface ProtocolTriggerArmState {
 export interface ProtocolRuntimeState {
   readonly executionSequence: number;
   readonly scheduled: readonly ProtocolScheduledExecutionState[];
+  readonly traces: readonly ProtocolExecutionTrace[];
   readonly triggers: readonly ProtocolTriggerArmState[];
 }
 
@@ -56,10 +61,14 @@ interface ProtocolIndex {
 interface ExecutionContext {
   readonly booleans: Map<string, boolean | undefined>;
   readonly index: ProtocolIndex;
+  readonly priority: Priority;
   readonly protocolExecutionId: string;
+  readonly protocolId: string;
   readonly readSensor: ProtocolSensorReader;
   /** §13.2: bir değerlendirmedeki tüm sensor okumaları tek tutarlı snapshot'tan gelir. */
   readonly sensors: Map<string, ProtocolLiteral | undefined>;
+  readonly startTime: number;
+  readonly steps: ProtocolExecutionStep[];
 }
 
 function portKey(nodeId: string, port: string): string {
@@ -105,11 +114,17 @@ export class ProtocolRuntime {
   private readonly armed = new Map<string, boolean>();
   private executionSequence = 0;
   private scheduled: ProtocolScheduledExecutionState[] = [];
+  private traces: ProtocolExecutionTrace[] = [];
+
+  getExecutionTraces(): readonly ProtocolExecutionTrace[] {
+    return Object.freeze([...this.traces]);
+  }
 
   exportState(): ProtocolRuntimeState {
     return Object.freeze({
       executionSequence: this.executionSequence,
       scheduled: Object.freeze(this.scheduled.map((entry) => Object.freeze({ ...entry }))),
+      traces: Object.freeze(this.traces.map((trace) => Object.freeze({ ...trace, steps: Object.freeze([...trace.steps]) }))),
       triggers: Object.freeze([...this.armed.entries()]
         .sort((left, right) => compareStrings(left[0], right[0]))
         .map(([key, armed]) => {
@@ -123,6 +138,9 @@ export class ProtocolRuntime {
     this.executionSequence = state.executionSequence;
     this.scheduled = [...state.scheduled]
       .map((entry) => Object.freeze({ ...entry }))
+      .sort((left, right) => compareStrings(left.protocolExecutionId, right.protocolExecutionId));
+    this.traces = [...state.traces]
+      .map((trace) => Object.freeze({ ...trace, steps: Object.freeze([...trace.steps]) }))
       .sort((left, right) => compareStrings(left.protocolExecutionId, right.protocolExecutionId));
     this.armed.clear();
     for (const trigger of state.triggers) this.armed.set(portKey(trigger.protocolId, trigger.nodeId), trigger.armed);
@@ -138,7 +156,7 @@ export class ProtocolRuntime {
       const delayNode = protocol?.nodes.find((candidate) => candidate.id === entry.delayNodeId);
       if (protocol === undefined || delayNode === undefined) continue;
       // §13.2: delay sonrası değerlendirme O ANKİ state'i okur; eski snapshot taşınmaz.
-      const context = this.createContext(protocol, entry.protocolExecutionId, input.readSensor);
+      const context = this.createContext(protocol, entry.protocolExecutionId, input.readSensor, input.simTime);
       this.propagate(protocol, delayNode, 'out', context, input, requests);
     }
 
@@ -150,7 +168,17 @@ export class ProtocolRuntime {
       // §13.2: trigger okuması, başlayacak execution'ın snapshot'ının ilk parçasıdır.
       const snapshot = new Map<string, ProtocolLiteral | undefined>();
       const booleans = new Map<string, boolean | undefined>();
-      const probe: ExecutionContext = { booleans, index, protocolExecutionId: '', readSensor: input.readSensor, sensors: snapshot };
+      const probe: ExecutionContext = {
+        booleans,
+        index,
+        priority: protocol.priority,
+        protocolExecutionId: '',
+        protocolId: protocol.id,
+        readSensor: input.readSensor,
+        sensors: snapshot,
+        startTime: input.simTime,
+        steps: [],
+      };
       const observed = readSensorValue(probe, trigger.node.sensorId, trigger.node.facilityId);
       const condition = compareLiterals(observed, trigger.node.operator, trigger.node.threshold);
       if (condition === undefined) continue;
@@ -164,13 +192,9 @@ export class ProtocolRuntime {
       if (this.armed.get(key) !== true) continue;
       this.armed.set(key, false);
 
-      const execution: ExecutionContext = {
-        booleans,
-        index,
-        protocolExecutionId: this.nextExecutionId(),
-        readSensor: input.readSensor,
-        sensors: snapshot,
-      };
+      const executionId = this.nextExecutionId();
+      const execution = this.createContext(protocol, executionId, input.readSensor, input.simTime);
+      Object.assign(execution, { booleans, sensors: snapshot });
       this.propagate(protocol, trigger, 'out', execution, input, requests);
     }
 
@@ -193,8 +217,49 @@ export class ProtocolRuntime {
     protocol: ExecutableProtocol,
     protocolExecutionId: string,
     readSensor: ProtocolSensorReader,
+    startTime: number,
   ): ExecutionContext {
-    return { booleans: new Map(), index: buildIndex(protocol), protocolExecutionId, readSensor, sensors: new Map() };
+    return {
+      booleans: new Map(),
+      index: buildIndex(protocol),
+      priority: protocol.priority,
+      protocolExecutionId,
+      protocolId: protocol.id,
+      readSensor,
+      sensors: new Map(),
+      startTime,
+      steps: [],
+    };
+  }
+
+  private recordStep(
+    context: ExecutionContext,
+    nodeKind: ProtocolNodeKind,
+    nodeId: string,
+    port: string,
+    simTime: number,
+    evaluationResult?: boolean,
+    sensorValue?: ProtocolLiteral,
+  ): void {
+    context.steps.push(Object.freeze({
+      timestamp: simTime,
+      nodeId,
+      nodeKind,
+      port,
+      ...(sensorValue === undefined ? {} : { sensorValue }),
+      ...(evaluationResult === undefined ? {} : { evaluationResult }),
+    }));
+  }
+
+  private finalizeTrace(context: ExecutionContext, completedAt: number): void {
+    this.traces = [...this.traces, Object.freeze({
+      protocolExecutionId: context.protocolExecutionId,
+      protocolId: context.protocolId,
+      priority: context.priority,
+      triggeredAt: context.startTime,
+      completedAt,
+      steps: Object.freeze([...context.steps]),
+    })].sort((left, right) => compareStrings(left.protocolExecutionId, right.protocolExecutionId));
   }
 
   private enter(
@@ -208,14 +273,17 @@ export class ProtocolRuntime {
     switch (node.kind) {
       case 'delay':
         // §13.5: simulation time ile bekler; wall clock kullanılmaz.
+        this.recordStep(context, 'delay', node.id, 'in', input.simTime);
         this.scheduled = [...this.scheduled, Object.freeze({
           delayNodeId: node.id,
           protocolExecutionId: context.protocolExecutionId,
           protocolId: protocol.id,
           remainingMinutes: node.durationMinutes,
         })].sort((left, right) => compareStrings(left.protocolExecutionId, right.protocolExecutionId));
+        this.finalizeTrace(context, input.simTime);
         return;
       case 'action':
+        this.recordStep(context, 'action', node.id, 'in', input.simTime);
         requests.push(Object.freeze({
           actuator: node.actionId,
           ...(node.facilityId === undefined ? {} : { facilityId: node.facilityId }),
@@ -225,17 +293,24 @@ export class ProtocolRuntime {
           simTime: input.simTime,
           ...(node.value === undefined ? {} : { value: node.value }),
         }));
+        this.finalizeTrace(context, input.simTime);
         return;
       case 'compare':
       case 'and': {
         // §13.3: instantaneous boolean evaluation; gizli memory yok.
         const result = evaluateBoolean(context, target);
+        this.recordStep(context, node.kind, node.id, 'in', input.simTime, result);
         if (result === undefined) return;
         this.propagate(protocol, target, result ? 'whenTrue' : 'whenFalse', context, input, requests);
         return;
       }
+      case 'sensor': {
+        const sensorValue = readSensorValue(context, node.sensorId, node.facilityId);
+        this.recordStep(context, 'sensor', node.id, 'value', input.simTime, undefined, sensorValue);
+        return;
+      }
       case 'trigger':
-      case 'sensor':
+        this.recordStep(context, 'trigger', node.id, 'out', input.simTime);
         return;
     }
   }
