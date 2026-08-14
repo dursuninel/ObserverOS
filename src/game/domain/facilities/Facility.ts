@@ -72,8 +72,14 @@ export interface FacilityInstanceState {
   readonly workPriority: Priority;
 }
 
+export const FACILITY_ACTUATORS = [
+  'set-condition', 'set-energy-priority', 'set-maintenance-priority', 'set-mode',
+  'set-operating-state', 'set-setpoint', 'set-work-priority',
+] as const;
+export type FacilityActuator = (typeof FACILITY_ACTUATORS)[number];
+
 export interface FacilityCommandRequest {
-  readonly actuator: 'set-condition' | 'set-energy-priority' | 'set-maintenance-priority' | 'set-mode' | 'set-operating-state' | 'set-setpoint' | 'set-work-priority';
+  readonly actuator: FacilityActuator;
   readonly facilityId: string;
   readonly id: string;
   readonly priority: Priority;
